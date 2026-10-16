@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"rust-cargo","ruleVersion":1,"rules":[{"id":"manifest","match":{"files":["**/Cargo.toml"]},"resolve":"cargo-v1","emit":{"frameworks":["rust","cargo"]}}]}

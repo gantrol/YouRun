@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "aspnet-core",
+  "ruleVersion": 2,
+  "rules": [{
+    "id": "project",
+    "match": {"files": ["**/*.csproj", "**/*.fsproj", "**/*.vbproj"], "propertyEquals": {"Sdk": "Microsoft.NET.Sdk.Web"}},
+    "resolve": "msbuild-v1",
+    "emit": {"frameworks": ["aspnet-core"]}
+  }, {
+    "id": "launch-profiles",
+    "match": {"files": ["**/*.csproj", "**/*.fsproj"], "propertyEquals": {"Sdk": "Microsoft.NET.Sdk.Web"}},
+    "resolve": "dotnet-config-commands-v1",
+    "commands": {
+      "profile": {"tool": "dotnet", "args": ["run", "--project", "./${file}", "--launch-profile", "${profile}", "--framework", "${framework}"], "origin": "configuration", "review": true}
+    },
+    "options": {"configFiles": ["Properties/launchSettings.json"]}
+  }, {
+    "id": "launch-profiles-vb",
+    "match": {"files": ["**/*.vbproj"], "propertyEquals": {"Sdk": "Microsoft.NET.Sdk.Web"}},
+    "resolve": "dotnet-config-commands-v1",
+    "commands": {
+      "profile": {"tool": "dotnet", "args": ["run", "--project", "./${file}", "--launch-profile", "${profile}", "--framework", "${framework}"], "origin": "configuration", "review": true}
+    },
+    "options": {"configFiles": ["My Project/launchSettings.json"]}
+  }]
+}

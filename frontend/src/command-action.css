@@ -1,0 +1,36 @@
+.command-action.runshelf-button {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+}
+[data-skin] .command-action.runshelf-button[data-unassigned] {
+  border-style: dashed;
+  border-color: var(--input);
+  box-shadow: none;
+}
+[data-skin] .command-action[aria-disabled="true"] {
+  cursor: progress;
+  background: var(--hover);
+  color: var(--muted-foreground);
+}
+[data-skin] .command-action.runshelf-button[aria-disabled="true"]:active {
+  transform: none;
+  box-shadow: none;
+}
+.command-action-symbol { transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .command-action-symbol[data-changed] {
+    animation: command-action-change 180ms var(--ease-out);
+  }
+}
+@keyframes command-action-change {
+  from { opacity: 0; transform: translateY(2px) scale(0.8); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .command-action.runshelf-button { transition: none; }
+  [data-skin] .command-action.runshelf-button:active { transform: none; }
+}
+@media (forced-colors: active) {
+  [data-skin] .command-action { border-color: ButtonText; box-shadow: none; }
+}

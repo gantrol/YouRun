@@ -1,0 +1,7 @@
+{
+  "identityName": "YouRun.Local",
+  "publisher": "CN=YouRun Local Development",
+  "publisherDisplayName": "YouRun",
+  "displayName": "YouRun",
+  "minVersion": "10.0.22000.0"
+}

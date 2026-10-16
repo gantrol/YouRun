@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"xcode","ruleVersion":1,"rules":[{"id":"shared-scheme","match":{"files":["**/xcshareddata/xcschemes/*.xcscheme"]},"resolve":"xcode-v1","emit":{"frameworks":["xcode"]}}]}

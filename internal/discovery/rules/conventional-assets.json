@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "conventional-assets",
+  "ruleVersion": 2,
+  "rules": [{
+    "id": "project-assets",
+    "match": {"files": ["**/package.json", "**/*.csproj", "**/*.fsproj", "**/*.vbproj", "**/go.mod", "**/Cargo.toml", "**/Package.swift", "**/CMakeLists.txt", "**/pyproject.toml", "**/pubspec.yaml"]},
+    "resolve": "conventional-assets-v1",
+    "emit": {"icons": [
+      {"paths": ["icon.ico", "build/icon.ico", "assets/icon.ico", "Resources/app.ico"], "base": "unit", "platform": "windows", "purpose": "application", "origin": "convention", "precedence": 10},
+      {"paths": ["icon.icns", "build/icon.icns", "assets/icon.icns", "Resources/app.icns"], "base": "unit", "platform": "darwin", "purpose": "application", "origin": "convention", "precedence": 10},
+      {"paths": ["logo.svg","logo.png","icon.png","icon.svg","favicon.svg","favicon.png","favicon.ico","public/logo.svg","public/logo.png","public/icon.png","public/icon.svg","public/favicon.svg","public/favicon.png","public/favicon.ico","assets/logo.svg","assets/logo.png","assets/icon.png","assets/icon.svg","assets/favicon.svg","assets/favicon.png","assets/favicon.ico","resources/logo.svg","resources/logo.png","resources/icon.png","resources/icon.svg","resources/favicon.svg","resources/favicon.png","resources/favicon.ico","build/logo.svg","build/logo.png","build/icon.png","build/icon.svg","build/favicon.svg","build/favicon.png","build/favicon.ico","src/public/logo.svg","src/public/logo.png","src/public/icon.png","src/public/icon.svg","src/public/favicon.svg","src/public/favicon.png","src/public/favicon.ico","src/renderer/public/logo.svg","src/renderer/public/logo.png","src/renderer/public/icon.png","src/renderer/public/icon.svg","src/renderer/public/favicon.svg","src/renderer/public/favicon.png","src/renderer/public/favicon.ico","src/assets/logo.svg","src/assets/logo.png","src/assets/icon.png","src/assets/icon.svg","src/assets/favicon.svg","src/assets/favicon.png","src/assets/favicon.ico","app.svg","app.png","static/logo.svg","static/logo.png","static/favicon.ico"], "base": "unit", "purpose": "application", "origin": "convention", "precedence": 0},
+      {"directories": ["resources/branding", "assets/branding", "public/branding", "static/branding", "src/assets/branding", "branding", "resources/brand", "assets/brand", "brand", "resources/icons", "assets/icons", "public/icons", "static/icons", "src/assets/icons", "icons", "resources/logos", "assets/logos", "public/logos", "static/logos", "src/assets/logos", "logos"], "base": "unit", "purpose": "application", "origin": "convention", "precedence": 0},
+      {"directories": ["."], "recursive": true, "base": "unit", "purpose": "application", "origin": "convention", "precedence": 0}
+    ]}
+  }]
+}

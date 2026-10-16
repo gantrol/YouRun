@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "mygo",
+  "ruleVersion": 1,
+  "rules": [{
+    "id": "module",
+    "match": {"files": ["**/go.mod"], "dependenciesAny": ["github.com/egoist/mygo"]},
+    "resolve": "go-module-metadata-v1",
+    "emit": {"frameworks": ["mygo", "go"]}
+  }]
+}

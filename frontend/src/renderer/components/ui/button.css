@@ -1,0 +1,91 @@
+[data-skin="comic"]
+  .runshelf-button:is(
+    [data-variant="default"],
+    [data-variant="outline"],
+    [data-command-control]
+  ),
+[data-skin="pixel"]
+  .runshelf-button:is(
+    [data-variant="default"],
+    [data-variant="outline"],
+    [data-command-control]
+  ) {
+  border: 2px solid var(--border-strong);
+  box-shadow: 2px 2px 0 var(--border-strong);
+  font-weight: 700;
+}
+[data-skin="comic"] .runshelf-button[data-command-control="stop"] {
+  background: #ffd0bf;
+  color: #722214;
+}
+[data-skin="comic"] .runshelf-button[data-command-control="output"] {
+  background: #c4ebda;
+  color: #173c2a;
+}
+[data-skin="comic"] .runshelf-button[data-command-control="restart"] {
+  background: #ffe780;
+}
+[data-skin="comic"]
+  .runshelf-button:is(
+    [data-variant="default"],
+    [data-variant="outline"],
+    [data-command-control]
+  ):active:not(:disabled),
+[data-skin="pixel"]
+  .runshelf-button:is(
+    [data-variant="default"],
+    [data-variant="outline"],
+    [data-command-control]
+  ):active:not(:disabled) {
+  box-shadow: none;
+  transform: translate(1px, 1px);
+}
+[data-skin="classic"]
+  .runshelf-button:is(
+    [data-variant="default"],
+    [data-variant="destructive"],
+    [data-variant="outline"],
+    [data-variant="secondary"],
+    [data-command-control]
+  ):active:not(:disabled),
+[data-skin="graphic"]
+  .runshelf-button:is(
+    [data-variant="default"],
+    [data-variant="destructive"],
+    [data-variant="outline"],
+    [data-variant="secondary"],
+    [data-command-control]
+  ):active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+[data-skin="comic"] .runshelf-button:disabled,
+[data-skin="pixel"] .runshelf-button:disabled {
+  box-shadow: none;
+}
+[data-skin="comic"] .runshelf-button[data-command-control]:disabled,
+[data-skin="pixel"] .runshelf-button[data-command-control]:disabled {
+  background: var(--hover);
+  color: var(--disabled-foreground);
+}
+/* The outline remains visible when a skin replaces Tailwind's ring shadow. */
+.runshelf-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+[data-skin="comic"] .runshelf-button svg {
+  stroke-width: 2;
+}
+[data-skin="pixel"] .runshelf-button,
+[data-skin="graphic"] .runshelf-button {
+  border-radius: 0;
+}
+[data-skin="pixel"] .runshelf-button svg {
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+@media (forced-colors: active) {
+  [data-skin] .runshelf-button[data-command-control] {
+    box-shadow: none;
+    border: 2px solid ButtonText;
+  }
+}

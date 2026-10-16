@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "flask",
+  "ruleVersion": 2,
+  "rules": [
+    {
+      "id": "project",
+      "match": {
+        "files": [
+          "**/pyproject.toml",
+          "**/requirements.txt"
+        ],
+        "dependenciesAny": [
+          "flask"
+        ]
+      },
+      "resolve": "python-static-v1",
+      "emit": {
+        "frameworks": [
+          "flask"
+        ]
+      }
+    },
+    {
+      "id": "commands",
+      "match": {"files": ["**/.flaskenv"]},
+      "resolve": "python-commands-v1",
+      "commands": {
+        "flask-run": {"tool": "python", "args": ["-m", "flask", "--app", "${entrypoint}", "run"], "origin": "configuration", "review": true}
+      }
+    }
+  ]
+}

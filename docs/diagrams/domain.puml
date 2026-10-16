@@ -1,0 +1,66 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam roundcorner 0
+hide methods
+hide circle
+title YouRun · 领域类
+class Definitions {
+  revision: int64
+  locale: string
+}
+class Project {
+  id: string
+  name: string
+  hidden: bool
+}
+class Button {
+  id: string
+  commandId: string
+  icon: string
+}
+class Command {
+  id: string
+  project: string?
+  text: string
+  directory: string
+  shell: string
+  fields: string[]
+}
+class "projectmeta.Entry" as Metadata {
+  roots: string[]
+  logoId: string
+  avatar: string
+  revision: int64
+}
+class Execution <<不可变快照>> {
+  id: string
+  commandId: string
+  text: string
+  directory: string
+  values: map
+}
+class Run {
+  id: string
+  commandId: string
+  template: string
+  text: string
+  status: string
+  pid: int
+  exitCode: int?
+}
+Definitions "1" o-- "0..*" Project
+Definitions "1" o-- "0..*" Command
+Project "0..1" -- "0..*" Command : 归属
+Project "1" *-- "0..3" Button
+Button "0..1" --> "0..1" Command : 绑定同项目命令
+Project "1" -- "0..1" Metadata : 按项目 ID 索引
+Command ..> Execution : start 时复制
+Execution "0..1" -- "1" Run : 同一运行 ID
+note bottom of Run
+  commandId 保留来源标识
+  命令删除后仍保留历史
+  历史兼容记录可没有 Execution
+end note
+@enduml

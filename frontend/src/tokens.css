@@ -1,0 +1,82 @@
+/* AIY light semantic palette, shared by both independent desktop hosts. */
+:root {
+  --background: #f8f7f3;
+  --surface: #fffefb;
+  --surface-sunken: #f1efea;
+  --foreground: #262320;
+  --foreground-secondary: #4a453e;
+  --muted-foreground: #6c665e;
+  --disabled-foreground: #a9a296;
+  --hover: #f1efea;
+  --hover-strong: #ece9e2;
+  --pressed: #dedad2;
+  --selected: #efe5e9;
+  --selected-foreground: #6e4052;
+  --selected-border: #e3d2da;
+  --primary: #302b29;
+  --primary-foreground: #fff;
+  --primary-hover: #262320;
+  --button-primary: #80566a;
+  --button-primary-foreground: #fff;
+  --button-primary-hover: #684456;
+  --border: #dedad2;
+  --border-strong: #c8c2b8;
+  --input: #c8c2b8;
+  --ring: #6e4052;
+  --success: #2f6b4f;
+  --success-surface: #e3efe7;
+  --warning: #a15c07;
+  --destructive: #b42318;
+  --destructive-foreground: #fff;
+  --destructive-surface: #fbe9e7;
+  --destructive-hover: #921b13;
+}
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-overlay: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-foreground-secondary: var(--foreground-secondary);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-disabled-foreground: var(--disabled-foreground);
+  --color-hover: var(--hover);
+  --color-hover-strong: var(--hover-strong);
+  --color-pressed: var(--pressed);
+  --color-selected: var(--selected);
+  --color-selected-foreground: var(--selected-foreground);
+  --color-selected-border: var(--selected-border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-surface: var(--destructive-surface);
+  --color-destructive-hover: var(--destructive-hover);
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei UI",
+    sans-serif;
+  --font-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-xs--line-height: 1.5;
+  --text-sm--line-height: 1.6;
+  --text-base--line-height: 1.6;
+  --radius-md: 0.5rem;
+  --duration-fast: 120ms;
+  --duration-normal: 160ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --z-index-popup: 50;
+  --z-index-modal-nested: 60;
+  --shadow-overlay: 0 4px 12px #26232016;
+}

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "angular",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "package",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "@angular/core"
+        ]
+      },
+      "resolve": "package-metadata-v1",
+      "emit": {
+        "frameworks": [
+          "angular"
+        ],
+        "icons": [
+          {
+            "paths": [
+              "public/favicon.ico",
+              "src/favicon.ico"
+            ],
+            "base": "unit",
+            "purpose": "application",
+            "origin": "convention",
+            "precedence": 80
+          }
+        ]
+      }
+    }
+  ]
+}

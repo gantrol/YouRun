@@ -1,0 +1,56 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam roundcorner 0
+title YouRun · 启动、停止与状态同步
+actor 用户 as User
+participant "React / ViewModel" as UI
+participant "desktop.Host" as Host
+participant "workspace.Service" as Workspace
+database SQLite as DB
+participant "engine.Client" as Client
+collections "执行文件 / 日志" as Files
+participant "独立执行器" as Worker
+participant "Shell / 命令树" as Shell
+User -> UI : 启动命令
+UI -> UI : flush() 等待定义保存
+UI -> Host : POST /api/run（新运行 ID）
+Host -> Workspace : Request
+Workspace -> DB : 读取已保存命令
+Workspace -> Client : 提交不可变 Execution
+Client -> Client : 校验 / 幂等 / 并发检查
+Client -> Files : 原子发布 manifest.json + state.json
+Client -> Worker : 启动当前程序 _execute
+Worker -> Files : 持有 owner.lock；写入 WorkerPID
+Client -> Files : 读取启动确认
+Client --> Workspace : Run（已接收）
+Workspace --> Host : Run
+Host --> UI : Run
+Worker -> Shell : 启动并持有进程控制句柄
+Shell -> Files : stdout / stderr 直接追加日志
+opt 用户请求停止
+  User -> UI : 停止
+  UI -> Host : POST /api/stop
+  Host -> Workspace : 转发请求
+  Workspace -> Client : Stop(id)
+  Client -> Files : 写 stop.json
+  Worker -> Files : 读取停止请求
+  Worker -> Shell : 停止进程组
+end
+Shell --> Worker : 命令树退出
+Worker -> Files : 写最终 state.json
+Worker -> Worker : 释放锁并退出
+Files --> Host : 文件变化通知（fsnotify）
+Host -> Workspace : 重新读取运行状态
+Workspace -> Client : State()
+Client -> Files : 读取执行记录
+Client --> Workspace : RuntimeState
+Workspace -> DB : SyncRuntime + Snapshot
+Workspace --> Host : 已提交快照
+Host --> UI : SSE snapshot / patch
+note over Host, Worker
+  时序为成功主路径；启动确认与 Shell 启动可交错
+  GUI 退出不会隐式停止独立执行器或命令
+end note
+@enduml

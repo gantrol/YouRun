@@ -1,0 +1,39 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam roundcorner 0
+title YouRun · Run.status
+state running
+state stopping
+state success
+state failed
+state stopped
+state unknown
+state "handedOff\n历史兼容" as handedOff
+[*] --> running : 发布执行意图
+running --> success : 命令树正常结束
+running --> failed : 启动 / 执行失败
+running --> stopping : 观察到 stop.json / 执行停止
+running --> stopped : 启动前消费停止请求
+running --> unknown : 执行器失联 / 进程组状态无法确认
+stopping --> stopped : 停止完成
+stopping --> success : 停止生效前已正常结束
+stopping --> failed : 停止生效前已失败
+stopping --> unknown : 无法确认控制者或结果
+success --> [*]
+failed --> [*]
+stopped --> [*]
+handedOff --> [*]
+note right of running
+  内部 phase 可为 pending / preparing /
+  waiting / executing
+end note
+note bottom of unknown
+  可能是读取时推断，不等于进程已退出
+  拒绝停止与重放；后续读取可纠正观察结果
+end note
+note bottom of handedOff
+  当前执行器不生成此状态
+end note
+@enduml

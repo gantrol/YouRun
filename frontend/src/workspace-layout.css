@@ -1,0 +1,41 @@
+@keyframes yourun-pane-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.workspace-rewrite > div { max-width: 110rem; }
+.workspace-rewrite .workspace-home { display: flex; width: auto; flex: 1; }
+.workspace-rewrite .workspace-project { display: flex; }
+.workspace-rewrite .workspace-leaf { width: 100%; max-width: none; border-left: 0; animation: yourun-pane-in var(--duration-normal) var(--ease-out); }
+.workspace-rewrite[data-panel="true"] .workspace-home { display: none; }
+.workspace-rewrite[data-leaf="true"] .workspace-project { display: none; }
+
+@container desktop (min-width: 900px) {
+  .workspace-rewrite[data-panel="true"] .workspace-home { display: flex; flex: 0 0 clamp(256px, var(--navigation-width, 336px), 45%); }
+  .workspace-rewrite[data-project="true"][data-leaf="true"] .workspace-home { display: none; }
+  .workspace-rewrite[data-leaf="true"] .workspace-project { display: flex; flex: 0 0 clamp(256px, var(--commands-width, 352px), 45%); }
+}
+
+@container desktop (min-width: 1400px) {
+  .workspace-rewrite[data-project="true"][data-leaf="true"] .workspace-home { display: flex; }
+}
+
+.workspace-rewrite .overflow-auto { scrollbar-gutter: stable; overscroll-behavior: contain; }
+.workspace-resizer { display: none; flex: 0 0 6px; position: relative; cursor: col-resize; touch-action: none; user-select: none; background: var(--surface-sunken); }
+.workspace-resizer::after { content: ""; position: absolute; inset: 0 2px; background: var(--border); transition: background-color var(--duration-fast) var(--ease-out); }
+.workspace-resizer:hover::after, .workspace-resizer[data-dragging]::after, .workspace-resizer:focus-visible::after { background: var(--foreground-secondary); }
+.workspace-resizer:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+@container desktop (min-width: 900px) {
+  .workspace-rewrite[data-panel="true"] .workspace-resizer-navigation { display: block; }
+  .workspace-rewrite[data-project="true"][data-leaf="true"] .workspace-resizer-navigation { display: none; }
+  .workspace-rewrite[data-project="true"][data-leaf="true"] .workspace-resizer-commands { display: block; }
+}
+@container desktop (min-width: 1400px) {
+  .workspace-rewrite[data-project="true"][data-leaf="true"] .workspace-resizer-navigation { display: block; }
+  .workspace-rewrite[data-project="true"][data-leaf="true"] .workspace-home { flex-basis: clamp(256px, var(--navigation-width, 336px), 32%); }
+  .workspace-rewrite[data-project="true"][data-leaf="true"] .workspace-project { flex-basis: clamp(256px, var(--commands-width, 352px), 32%); }
+}

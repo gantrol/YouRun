@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "react",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "package",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "react"
+        ]
+      },
+      "resolve": "package-metadata-v1",
+      "emit": {
+        "frameworks": [
+          "react"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "django",
+  "ruleVersion": 2,
+  "rules": [
+    {
+      "id": "project",
+      "match": {
+        "files": [
+          "**/pyproject.toml",
+          "**/requirements.txt"
+        ],
+        "dependenciesAny": [
+          "django"
+        ]
+      },
+      "resolve": "python-static-v1",
+      "emit": {
+        "frameworks": [
+          "django"
+        ]
+      }
+    },
+    {
+      "id": "commands",
+      "match": {"files": ["**/manage.py"]},
+      "resolve": "python-commands-v1",
+      "commands": {
+        "django-runserver": {"tool": "python", "args": ["${manageFile}", "runserver"], "origin": "configuration", "review": true},
+        "django-check": {"tool": "python", "args": ["${manageFile}", "check"], "origin": "configuration", "review": true}
+      }
+    }
+  ]
+}

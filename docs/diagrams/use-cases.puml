@@ -1,0 +1,50 @@
+@startuml
+' Graphviz keeps actor columns and vertical use-case ordering separate.
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam roundcorner 0
+skinparam nodesep 35
+skinparam ranksep 65
+skinparam ArrowColor #64748B
+skinparam usecaseBackgroundColor #F8FAFC
+skinparam usecaseBorderColor #64748B
+skinparam rectangleBackgroundColor #FFFFFF
+skinparam rectangleBorderColor #CBD5E1
+skinparam actor {
+  BackgroundColor<<Desktop>> #FFF7ED
+  BorderColor<<Desktop>> #B45309
+  FontColor<<Desktop>> #B45309
+  BackgroundColor<<CLI>> #F0FDFA
+  BorderColor<<CLI>> #0F766E
+  FontColor<<CLI>> #0F766E
+}
+hide stereotype
+left to right direction
+title YouRun · 用例
+actor "桌面用户" as User <<Desktop>>
+actor "脚本 / Agent\nCLI 调用方" as Agent <<CLI>>
+rectangle YouRun {
+  usecase "发现并导入候选命令" as Import
+  usecase "静态扫描项目" as Scan
+  usecase "管理项目与命令" as Manage
+  usecase "启动命令" as Run
+  usecase "停止 / 重放执行" as Control
+  usecase "查看状态、历史与日志" as Observe
+  usecase "设置按钮、图标与外观" as Settings
+}
+User -[#B45309]- Manage
+User -[#B45309]- Import
+User -[#B45309]- Run
+User -[#B45309]- Control
+User -[#B45309]- Observe
+User -[#B45309]- Settings
+Scan -[#0F766E]- Agent
+Run -[#0F766E]- Agent
+Control -[#0F766E]- Agent
+Observe -[#0F766E]- Agent
+Import .[#64748B].> Scan : <<include>>
+note bottom of Agent
+  已保存命令：start
+  不接收任意命令文本
+end note
+@enduml

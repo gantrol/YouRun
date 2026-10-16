@@ -1,0 +1,82 @@
+{
+  "classic": {
+    "label": "skinClassic",
+    "radius": 4,
+    "colors": {}
+  },
+  "comic": {
+    "label": "skinComic",
+    "radius": 3,
+    "colors": {
+      "background": "#fff8e9",
+      "surface": "#fffdf5",
+      "surface-sunken": "#f6edcf",
+      "foreground": "#24231f",
+      "foreground-secondary": "#484438",
+      "muted-foreground": "#696354",
+      "hover": "#f6edcf",
+      "hover-strong": "#eee0b5",
+      "pressed": "#e5ce83",
+      "selected": "#ffe780",
+      "selected-foreground": "#29271e",
+      "selected-border": "#24231f",
+      "border": "#d7cbb0",
+      "border-strong": "#24231f",
+      "input": "#756d59",
+      "ring": "#24231f",
+      "button-primary": "#ffe066",
+      "button-primary-foreground": "#24231f",
+      "button-primary-hover": "#f5cc3d"
+    }
+  },
+  "graphic": {
+    "label": "skinGraphic",
+    "radius": 0,
+    "colors": {
+      "background": "#f5f4ef",
+      "surface": "#ffffff",
+      "surface-sunken": "#efeee8",
+      "foreground": "#202321",
+      "foreground-secondary": "#414743",
+      "muted-foreground": "#666c66",
+      "hover": "#efeee8",
+      "hover-strong": "#e0e4d8",
+      "pressed": "#cbd6bd",
+      "selected": "#e2ebd3",
+      "selected-foreground": "#28432b",
+      "selected-border": "#7b936e",
+      "border": "#d6d8cf",
+      "border-strong": "#202321",
+      "input": "#91998d",
+      "ring": "#28432b",
+      "button-primary": "#28432b",
+      "button-primary-foreground": "#ffffff",
+      "button-primary-hover": "#1c321f"
+    }
+  },
+  "pixel": {
+    "label": "skinPixel",
+    "radius": 0,
+    "colors": {
+      "background": "#edf0df",
+      "surface": "#f9faef",
+      "surface-sunken": "#e0e7cb",
+      "foreground": "#263b2b",
+      "foreground-secondary": "#42553a",
+      "muted-foreground": "#5c6a4c",
+      "hover": "#e0e7cb",
+      "hover-strong": "#d1ddba",
+      "pressed": "#b9cb9d",
+      "selected": "#d1e1b4",
+      "selected-foreground": "#263b2b",
+      "selected-border": "#577345",
+      "border": "#b7c5a0",
+      "border-strong": "#42553a",
+      "input": "#7c9068",
+      "ring": "#42553a",
+      "button-primary": "#425d35",
+      "button-primary-foreground": "#f9faef",
+      "button-primary-hover": "#304726"
+    }
+  }
+}

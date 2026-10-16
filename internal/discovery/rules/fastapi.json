@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi",
+  "ruleVersion": 2,
+  "rules": [
+    {
+      "id": "project",
+      "match": {
+        "files": [
+          "**/pyproject.toml",
+          "**/requirements.txt"
+        ],
+        "dependenciesAny": [
+          "fastapi"
+        ]
+      },
+      "resolve": "python-static-v1",
+      "emit": {
+        "frameworks": [
+          "fastapi"
+        ]
+      }
+    },
+    {
+      "id": "commands",
+      "match": {"files": ["**/pyproject.toml"]},
+      "resolve": "python-commands-v1",
+      "commands": {
+        "fastapi-dev": {"tool": "fastapi", "args": ["dev", "--entrypoint", "${entrypoint}"], "origin": "configuration", "review": true},
+        "fastapi-run": {"tool": "fastapi", "args": ["run", "--entrypoint", "${entrypoint}"], "origin": "configuration", "review": true}
+      }
+    }
+  ]
+}

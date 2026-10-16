@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "id": "android-gradle",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "commands",
+      "match": {
+        "files": [
+          "**/build.gradle",
+          "**/build.gradle.kts"
+        ],
+        "pluginsAny": [
+          "com.android.application",
+          "com.android.library"
+        ]
+      },
+      "resolve": "android-gradle-v1",
+      "commands": {
+        "assemble": {
+          "tool": "${gradleTool}",
+          "args": [
+            "${modulePath}:assemble${variant}"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "bundle": {
+          "tool": "${gradleTool}",
+          "args": [
+            "${modulePath}:bundle${variant}"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "install": {
+          "tool": "${gradleTool}",
+          "args": [
+            "${modulePath}:install${variant}"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "start": {
+          "tool": "adb",
+          "args": [
+            "shell",
+            "am",
+            "start",
+            "-n",
+            "${component}"
+          ],
+          "origin": "configuration",
+          "review": true
+        }
+      }
+    }
+  ]
+}

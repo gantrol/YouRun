@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "flutter",
+  "ruleVersion": 2,
+  "rules": [{
+    "id": "application",
+    "match": {"files": ["**/pubspec.yaml", "**/flutter_launcher_icons.yaml"]},
+    "resolve": "flutter-static-v1",
+    "emit": {
+      "frameworks": ["flutter", "dart"],
+      "names": [{"field": ["name"], "origin": "declared"}],
+      "icons": [
+        {"field": ["flutter_launcher_icons", "windows", "image_path"], "base": "config", "platform": "windows", "purpose": "application", "origin": "declared", "precedence": 200},
+        {"field": ["flutter_launcher_icons", "macos", "image_path"], "base": "config", "platform": "darwin", "purpose": "application", "origin": "declared", "precedence": 200},
+        {"field": ["flutter_launcher_icons", "image_path"], "base": "config", "purpose": "application", "origin": "declared", "precedence": 150},
+        {"field": ["flutter_launcher_icons", "image_path_android"], "base": "config", "purpose": "application", "origin": "declared", "precedence": 90},
+        {"field": ["flutter_launcher_icons", "image_path_ios"], "base": "config", "purpose": "application", "origin": "declared", "precedence": 90},
+        {"paths": ["windows/runner/resources/app_icon.ico"], "base": "unit", "platform": "windows", "purpose": "application", "origin": "convention", "precedence": 50}
+      ]
+    },
+    "options": {"configFiles": ["flutter_launcher_icons.yaml"]}
+  }, {
+    "id": "configured-commands",
+    "match": {"files": ["**/pubspec.yaml"]},
+    "resolve": "flutter-commands-v1",
+    "commands": {
+      "run": {"tool": "flutter", "args": ["run", "${entry}"], "origin": "configuration", "review": true},
+      "build-apk": {"tool": "flutter", "args": ["build", "apk", "--target", "${entry}"], "origin": "configuration", "review": true},
+      "build-ios": {"tool": "flutter", "args": ["build", "ios", "--target", "${entry}"], "origin": "configuration", "platform": "macOS", "review": true},
+      "build-web": {"tool": "flutter", "args": ["build", "web", "--target", "${entry}"], "origin": "configuration", "review": true},
+      "build-windows": {"tool": "flutter", "args": ["build", "windows", "--target", "${entry}"], "origin": "configuration", "platform": "Windows", "review": true},
+      "build-macos": {"tool": "flutter", "args": ["build", "macos", "--target", "${entry}"], "origin": "configuration", "platform": "macOS", "review": true}
+    },
+    "options": {
+      "entryFiles": ["lib/main.dart"],
+      "platformFiles": {
+        "apk": ["android/app/build.gradle", "android/app/build.gradle.kts"],
+        "ios": ["ios/Runner.xcodeproj/project.pbxproj"],
+        "web": ["web/index.html"],
+        "windows": ["windows/CMakeLists.txt"],
+        "macos": ["macos/Runner.xcodeproj/project.pbxproj"]
+      }
+    }
+  }]
+}

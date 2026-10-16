@@ -1,0 +1,46 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam roundcorner 0
+left to right direction
+title YouRun · 本机进程与存储
+node "用户设备" {
+  node "GUI 宿主（可多开）" as GUI <<process>> {
+    artifact "MyGo WebView / Wails + React\n或 MyGo Native" as UI
+    component "desktop.Host\n127.0.0.1:随机端口" as Host
+    component "工作区服务 / 执行控制器" as GUIController
+    UI --> Host : HTTP / SSE
+    Host --> GUIController
+  }
+  node "yourun CLI" as CLI <<process>> {
+    component "工作区服务 / 执行控制器" as CLIController
+  }
+  node "每次执行的 _execute" as Worker <<process>>
+  node "Shell + 命令子进程" as Command <<processGroup>>
+  folder "用户数据目录" {
+    database "command-manager.sqlite3\n应用定义 / 历史 / 设置 / 元数据" as DB
+    artifact "executions/<id>/\nmanifest.json · state.json\nowner.lock · stop.json（按需）" as Records
+    artifact "logs/<id>.log" as Logs
+    artifact "project-avatars/\n头像文件" as Avatars
+  }
+  folder "用户项目目录" as Projects
+}
+GUIController --> DB
+CLIController --> DB : 需要应用数据时
+GUIController --> Records
+CLIController --> Records
+GUIController ..> Worker : 启动
+CLIController ..> Worker : 启动
+Worker --> Records : 状态与停止控制
+Worker --> Command : 启动 / 控制句柄
+Command --> Logs : 直接持有文件句柄
+Command --> Projects : 工作目录
+Host --> Avatars
+Host --> Projects : 静态发现
+CLIController --> Projects : 静态发现
+note bottom of Worker
+  直接执行现有程序，不复制二进制到数据目录
+  不打开 SQLite；无中央常驻执行服务
+end note
+@enduml

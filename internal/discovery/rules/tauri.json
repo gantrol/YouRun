@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "tauri",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "package",
+      "match": {"files": ["**/package.json"], "dependenciesAny": ["@tauri-apps/api", "@tauri-apps/cli"]},
+      "resolve": "package-metadata-v1",
+      "emit": {"frameworks": ["tauri"]},
+      "options": {"configFiles": ["tauri.conf.json", "tauri.conf.json5", "Tauri.toml", "src-tauri/tauri.conf.json", "src-tauri/tauri.conf.json5", "src-tauri/Tauri.toml"]}
+    },
+    {
+      "id": "application",
+      "match": {"files": ["**/tauri.conf.json", "**/tauri.conf.json5", "**/Tauri.toml", "**/tauri.windows.conf.json", "**/tauri.windows.conf.json5", "**/tauri.macos.conf.json", "**/tauri.macos.conf.json5", "**/tauri.linux.conf.json", "**/tauri.linux.conf.json5", "**/Tauri.windows.toml", "**/Tauri.macos.toml", "**/Tauri.linux.toml"]},
+      "resolve": "tauri-static-v1",
+      "emit": {
+        "frameworks": ["tauri", "rust"],
+        "names": [{"field": ["productName"], "origin": "declared"}],
+        "icons": [
+          {"field": ["bundle", "icon"], "base": "config", "extensions": [".ico"], "platform": "windows", "purpose": "application", "origin": "declared", "precedence": 200},
+          {"field": ["bundle", "icon"], "base": "config", "extensions": [".icns"], "platform": "darwin", "purpose": "application", "origin": "declared", "precedence": 200},
+          {"field": ["bundle", "icon"], "base": "config", "extensions": [".png", ".svg", ".ico"], "purpose": "application", "origin": "declared", "precedence": 100},
+          {"paths": ["icons/icon.ico"], "base": "config", "platform": "windows", "purpose": "application", "origin": "convention", "precedence": 60},
+          {"paths": ["icons/icon.png", "icons/128x128@2x.png", "icons/128x128.png", "icons/32x32.png"], "base": "config", "purpose": "application", "origin": "convention", "precedence": 50}
+        ]
+      },
+      "options": {
+        "configFiles": ["tauri.conf.json", "tauri.conf.json5", "Tauri.toml"],
+        "platformConfigFiles": {
+          "windows": ["tauri.windows.conf.json", "tauri.windows.conf.json5", "Tauri.windows.toml"],
+          "darwin": ["tauri.macos.conf.json", "tauri.macos.conf.json5", "Tauri.macos.toml"],
+          "linux": ["tauri.linux.conf.json", "tauri.linux.conf.json5", "Tauri.linux.toml"]
+        }
+      }
+    }
+  ]
+}

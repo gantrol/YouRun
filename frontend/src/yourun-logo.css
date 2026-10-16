@@ -1,0 +1,55 @@
+/* The loading/error header also works outside AppearanceProvider. */
+.yourun-logo {
+  --yourun-rabbit-classic: none;
+  --yourun-rabbit-comic: inline;
+  --yourun-rabbit-graphic: none;
+  --yourun-rabbit-pixel: none;
+}
+
+[data-skin="classic"] .yourun-logo:not([data-skin]),
+.yourun-logo[data-skin="classic"] {
+  --yourun-rabbit-classic: inline;
+  --yourun-rabbit-comic: none;
+}
+
+[data-skin="graphic"] .yourun-logo:not([data-skin]),
+.yourun-logo[data-skin="graphic"] {
+  --yourun-rabbit-comic: none;
+  --yourun-rabbit-graphic: inline;
+}
+
+[data-skin="pixel"] .yourun-logo:not([data-skin]),
+.yourun-logo[data-skin="pixel"] {
+  --yourun-rabbit-comic: none;
+  --yourun-rabbit-pixel: inline;
+}
+
+.yourun-logo > .yourun-rabbit-classic {
+  display: var(--yourun-rabbit-classic);
+  fill: var(--yourun-logo-fill, var(--button-primary, #80566a));
+}
+
+.yourun-logo > .yourun-rabbit-comic {
+  display: var(--yourun-rabbit-comic);
+  fill: var(--yourun-logo-fill, var(--button-primary, #ffe066));
+}
+
+.yourun-logo > .yourun-rabbit-graphic {
+  display: var(--yourun-rabbit-graphic);
+  fill: var(--yourun-logo-fill, var(--button-primary, #28432b));
+}
+
+.yourun-logo > .yourun-rabbit-pixel {
+  display: var(--yourun-rabbit-pixel);
+  fill: var(--yourun-logo-fill, var(--button-primary, #425d35));
+}
+
+@media (forced-colors: active) {
+  .yourun-logo,
+  [data-skin] .yourun-logo {
+    --yourun-logo-fill: CanvasText;
+    --yourun-logo-ink: CanvasText;
+    --yourun-logo-eye: Canvas;
+    forced-color-adjust: none;
+  }
+}

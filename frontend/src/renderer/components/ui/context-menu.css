@@ -1,0 +1,26 @@
+@keyframes yourun-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.runshelf-context-menu[data-state="open"] {
+  animation: yourun-popup-in var(--duration-fast) var(--ease-out);
+}
+[data-skin="comic"] .runshelf-context-menu,
+[data-skin="pixel"] .runshelf-context-menu {
+  border: 2px solid var(--border-strong);
+  box-shadow: 3px 3px 0 var(--border-strong);
+}
+[data-skin="graphic"] .runshelf-context-menu {
+  border-color: var(--border-strong);
+  box-shadow: none;
+}
+[data-skin="graphic"] .runshelf-context-menu,
+[data-skin="pixel"] .runshelf-context-menu {
+  border-radius: 0;
+}

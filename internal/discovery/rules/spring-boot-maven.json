@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "spring-boot-maven",
+  "ruleVersion": 1,
+  "rules": [{
+    "id": "commands",
+    "match": {"files": ["**/pom.xml"]},
+    "resolve": "maven-commands-v1",
+    "commands": {
+      "spring-boot-run": {"tool": "${mavenTool}", "args": ["-f", "${pomFile}", "spring-boot:run"], "origin": "configuration", "review": true}
+    }
+  }]
+}

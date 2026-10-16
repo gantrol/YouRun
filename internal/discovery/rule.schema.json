@@ -1,0 +1,850 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "YouRun discovery rule pack",
+  "description": "Data-only discovery rules. The loader additionally validates unique IDs, registered resolver command keys, template variables, supported package managers, and root-relative paths. External pack replacements must explicitly name an installed pack.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "ruleVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "replaces": {
+      "$ref": "#/$defs/id"
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "ruleVersion",
+    "rules"
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "field": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[^\\\\:*?\\[\\]\\u0000\\r\\n]+$"
+    },
+    "name": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "$ref": "#/$defs/field"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "declared",
+            "convention"
+          ]
+        }
+      },
+      "required": [
+        "field",
+        "origin"
+      ]
+    },
+    "icon": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "$ref": "#/$defs/field"
+        },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "directories": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/path"
+          },
+          "description": "Immediate image files with arbitrary names in dedicated asset directories; tried after all field/path selectors. Only conventional-assets-v1 with convention origin."
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "Bounded source-tree fallback after all other icon selectors. Requires directories; excludes dependencies, generated output, documentation, tests and nested projects."
+        },
+        "base": {
+          "enum": [
+            "config",
+            "unit",
+            "buildResourcesRoot"
+          ]
+        },
+        "extensions": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "pattern": "^\\.[a-z0-9]{1,12}$"
+          }
+        },
+        "platform": {
+          "enum": [
+            "windows",
+            "darwin",
+            "linux"
+          ]
+        },
+        "purpose": {
+          "const": "application"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "declared",
+            "convention"
+          ]
+        },
+        "precedence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "base",
+        "purpose",
+        "origin"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "field"
+          ]
+        },
+        {
+          "required": [
+            "paths"
+          ]
+        },
+        {
+          "required": [
+            "directories"
+          ]
+        }
+      ],
+      "allOf": [
+        {
+          "if": {"properties": {"recursive": {"const": true}}, "required": ["recursive"]},
+          "then": {"required": ["directories"]}
+        },
+        {
+          "if": {"required": ["directories"]},
+          "then": {
+            "properties": {
+              "origin": {"const": "convention"}
+            }
+          }
+        }
+      ]
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "enum": [
+            "npm",
+            "pnpm",
+            "yarn",
+            "bun",
+            "dotnet",
+            "MSBuild",
+            "${packageManager}",
+            "python",
+            "poetry",
+            "uv",
+            "fastapi",
+            "${scriptName}",
+            "${script}",
+            "bash",
+            "flutter",
+            "mvn",
+            "./mvnw.cmd",
+            "./mvnw",
+            "${mavenTool}",
+            "gradle",
+            "./gradlew.bat",
+            "./gradlew",
+            "${gradleTool}",
+            "adb",
+            "xcodebuild",
+            "xcrun"
+          ]
+        },
+        "args": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "maxLength": 4000,
+            "pattern": "^[^\\u0000\\r\\n]*$"
+          }
+        },
+        "origin": {
+          "enum": [
+            "configuration",
+            "template"
+          ]
+        },
+        "platform": {
+          "enum": [
+            "Windows",
+            "macOS",
+            "macOS / Windows"
+          ]
+        },
+        "review": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tool",
+        "args",
+        "origin"
+      ]
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packageManagers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "enum": [
+              "npm",
+              "pnpm",
+              "yarn",
+              "bun"
+            ]
+          }
+        },
+        "lockfiles": {
+          "type": "object",
+          "maxProperties": 32,
+          "additionalProperties": {
+            "enum": [
+              "npm",
+              "pnpm",
+              "yarn",
+              "bun"
+            ]
+          }
+        },
+        "defaultManager": {
+          "enum": [
+            "npm",
+            "pnpm",
+            "yarn",
+            "bun"
+          ]
+        },
+        "configFiles": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "buildResourcesField": {
+          "$ref": "#/$defs/field"
+        },
+        "defaultBuildResources": {
+          "$ref": "#/$defs/path"
+        },
+        "webRoots": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[^/\\\\:*?\\[\\]\\u0000\\r\\n]+$"
+          }
+        },
+        "platformConfigFiles": {
+          "type": "object",
+          "maxProperties": 3,
+          "propertyNames": {
+            "enum": [
+              "windows",
+              "darwin",
+              "linux"
+            ]
+          },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[^/\\\\:*?\\[\\]\\u0000\\r\\n]+$"
+            }
+          }
+        },
+        "valueRoot": {
+          "$ref": "#/$defs/field"
+        },
+        "dynamicConfigFiles": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "entryFiles": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "platformFiles": {
+          "type": "object",
+          "maxProperties": 5,
+          "propertyNames": {
+            "enum": [
+              "apk",
+              "ios",
+              "web",
+              "windows",
+              "macos"
+            ]
+          },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/$defs/path"
+            }
+          }
+        }
+      }
+    },
+    "emit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "frameworks": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "names": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "icons": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/icon"
+          }
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "description": "Case-insensitive forward-slash glob; ** only as a directory segment. Paths must stay inside the selected root."
+              }
+            },
+            "dependenciesAny": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "maxLength": 512,
+                "anyOf": [
+                  {
+                    "maxLength": 214,
+                    "pattern": "^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$"
+                  },
+                  {
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._~+-]*(?:/[A-Za-z0-9][A-Za-z0-9._~+-]*)*$"
+                  }
+                ]
+              },
+              "description": "Exact package-name OR condition over declared dependencies. Python and MSBuild resolvers normalize their dependency names before matching."
+            },
+            "propertyEquals": {
+              "type": "object",
+              "minProperties": 1,
+              "maxProperties": 16,
+              "propertyNames": {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,127}$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "pattern": "^[^\\u0000\\r\\n]*$"
+              }
+            },
+            "pluginsAny": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,213}$"
+              },
+              "description": "Exact OR condition over statically applied Gradle plugins, excluding apply false."
+            }
+          },
+          "required": [
+            "files"
+          ]
+        },
+        "resolve": {
+          "enum": [
+            "node-v1",
+            "project-script-v1",
+            "electron-builder-static-v1",
+            "msbuild-v1",
+            "go-v1",
+            "cargo-v1",
+            "swift-v1",
+            "cmake-v1",
+            "xcode-v1",
+            "conventional-assets-v1",
+            "web-manifest-v1",
+            "package-metadata-v1",
+            "tauri-static-v1",
+            "python-static-v1",
+            "flutter-static-v1",
+            "json-app-v1",
+            "go-module-metadata-v1",
+            "python-commands-v1",
+            "flutter-commands-v1",
+            "dotnet-config-commands-v1",
+            "nest-cli-v1",
+            "expo-commands-v1",
+            "react-native-commands-v1",
+            "eas-commands-v1",
+            "maven-commands-v1",
+            "gradle-java-v1",
+            "spring-boot-gradle-v1",
+            "android-gradle-v1",
+            "ios-xcode-commands-v1"
+          ]
+        },
+        "emit": {
+          "$ref": "#/$defs/emit"
+        },
+        "commands": {
+          "type": "object",
+          "maxProperties": 32,
+          "propertyNames": {
+            "enum": [
+              "script",
+              "solution-build",
+              "native-build",
+              "native-build-default",
+              "legacy-build",
+              "build",
+              "test",
+              "run",
+              "publish",
+              "poetry-script",
+              "uv-script",
+              "poetry-build",
+              "django-runserver",
+              "django-check",
+              "fastapi-dev",
+              "fastapi-run",
+              "flask-run",
+              "build-apk",
+              "build-ios",
+              "build-web",
+              "build-windows",
+              "build-macos",
+              "profile",
+              "run-target",
+              "build-npm",
+              "build-pnpm",
+              "build-yarn",
+              "build-bun",
+              "start-npm",
+              "start-pnpm",
+              "start-yarn",
+              "start-bun",
+              "watch-npm",
+              "watch-pnpm",
+              "watch-yarn",
+              "watch-bun",
+              "build-project-npm",
+              "build-project-pnpm",
+              "build-project-yarn",
+              "build-project-bun",
+              "start-project-npm",
+              "start-project-pnpm",
+              "start-project-yarn",
+              "start-project-bun",
+              "watch-project-npm",
+              "watch-project-pnpm",
+              "watch-project-yarn",
+              "watch-project-bun",
+              "android-npm",
+              "android-pnpm",
+              "android-yarn",
+              "android-bun",
+              "ios-npm",
+              "ios-pnpm",
+              "ios-yarn",
+              "ios-bun",
+              "build-profile-npm",
+              "build-profile-pnpm",
+              "build-profile-yarn",
+              "build-profile-bun",
+              "build-android-npm",
+              "build-android-pnpm",
+              "build-android-yarn",
+              "build-android-bun",
+              "build-ios-npm",
+              "build-ios-pnpm",
+              "build-ios-yarn",
+              "build-ios-bun",
+              "package",
+              "exec-java",
+              "spring-boot-run",
+              "boot-run",
+              "boot-jar",
+              "boot-war",
+              "assemble",
+              "bundle",
+              "install",
+              "start",
+              "project-simulator",
+              "project-device",
+              "workspace-simulator",
+              "workspace-device",
+              "target-simulator",
+              "target-device",
+              "simulator-launch"
+            ]
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/command"
+          }
+        },
+        "options": {
+          "$ref": "#/$defs/options"
+        }
+      },
+      "required": [
+        "id",
+        "match",
+        "resolve"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "required": ["emit"],
+            "properties": {
+              "emit": {
+                "required": ["icons"],
+                "properties": {
+                  "icons": {"contains": {"required": ["directories"]}}
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolve": {"const": "conventional-assets-v1"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "match": {
+                "required": [
+                  "dependenciesAny"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolve": {
+                "enum": [
+                  "package-metadata-v1",
+                  "python-static-v1",
+                  "msbuild-v1",
+                  "json-app-v1",
+                  "go-module-metadata-v1",
+                  "nest-cli-v1",
+                  "expo-commands-v1",
+                  "react-native-commands-v1",
+                  "eas-commands-v1"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "match": {
+                "required": [
+                  "propertyEquals"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolve": {
+                "enum": [
+                  "msbuild-v1",
+                  "dotnet-config-commands-v1"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "resolve": {
+                "const": "msbuild-v1"
+              },
+              "match": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "propertyEquals"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "dependenciesAny"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "commands": {
+                "maxProperties": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "options"
+            ],
+            "properties": {
+              "options": {
+                "required": [
+                  "platformConfigFiles"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolve": {
+                "const": "tauri-static-v1"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "options"
+            ],
+            "properties": {
+              "options": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "valueRoot"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "dynamicConfigFiles"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolve": {
+                "const": "json-app-v1"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "options"
+            ],
+            "properties": {
+              "options": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "entryFiles"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "platformFiles"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolve": {
+                "const": "flutter-commands-v1"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "resolve": {
+                "const": "python-commands-v1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "commands": {
+                "patternProperties": {
+                  "^(?!script$).+$": {
+                    "properties": {
+                      "args": {
+                        "minItems": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "commands": {
+                "additionalProperties": {
+                  "properties": {
+                    "args": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "match": {
+                "required": [
+                  "pluginsAny"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolve": {
+                "enum": [
+                  "gradle-java-v1",
+                  "spring-boot-gradle-v1",
+                  "android-gradle-v1"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

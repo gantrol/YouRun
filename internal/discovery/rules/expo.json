@@ -1,0 +1,394 @@
+{
+  "schemaVersion": 1,
+  "id": "expo",
+  "ruleVersion": 2,
+  "rules": [
+    {
+      "id": "package",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "expo"
+        ]
+      },
+      "resolve": "package-metadata-v1",
+      "emit": {
+        "frameworks": [
+          "expo",
+          "react-native"
+        ]
+      },
+      "options": {
+        "configFiles": [
+          "app.config.json",
+          "app.json",
+          "app.config.ts",
+          "app.config.js"
+        ]
+      }
+    },
+    {
+      "id": "application",
+      "match": {
+        "files": [
+          "**/app.config.json",
+          "**/app.json",
+          "**/app.config.ts",
+          "**/app.config.js"
+        ],
+        "dependenciesAny": [
+          "expo"
+        ]
+      },
+      "resolve": "json-app-v1",
+      "emit": {
+        "frameworks": [
+          "expo",
+          "react-native"
+        ],
+        "names": [
+          {
+            "field": [
+              "name"
+            ],
+            "origin": "declared"
+          }
+        ],
+        "icons": [
+          {
+            "field": [
+              "icon"
+            ],
+            "base": "config",
+            "purpose": "application",
+            "origin": "declared",
+            "precedence": 180
+          },
+          {
+            "field": [
+              "android",
+              "icon"
+            ],
+            "base": "config",
+            "purpose": "application",
+            "origin": "declared",
+            "precedence": 100
+          },
+          {
+            "field": [
+              "ios",
+              "icon"
+            ],
+            "base": "config",
+            "purpose": "application",
+            "origin": "declared",
+            "precedence": 100
+          }
+        ]
+      },
+      "options": {
+        "valueRoot": [
+          "expo"
+        ],
+        "configFiles": [
+          "app.config.json",
+          "app.json"
+        ],
+        "dynamicConfigFiles": [
+          "app.config.ts",
+          "app.config.js"
+        ]
+      }
+    },
+    {
+      "id": "commands",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "expo"
+        ]
+      },
+      "resolve": "expo-commands-v1",
+      "commands": {
+        "start-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=expo",
+            "--",
+            "expo",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "expo",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "expo",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "expo",
+            "expo",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "android-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=expo",
+            "--",
+            "expo",
+            "run:android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "android-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "expo",
+            "run:android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "android-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "expo",
+            "run:android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "android-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "expo",
+            "expo",
+            "run:android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "ios-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=expo",
+            "--",
+            "expo",
+            "run:ios"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "ios-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "expo",
+            "run:ios"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "ios-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "expo",
+            "run:ios"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "ios-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "expo",
+            "expo",
+            "run:ios"
+          ],
+          "origin": "template",
+          "review": true
+        }
+      }
+    },
+    {
+      "id": "eas-commands",
+      "match": {
+        "files": [
+          "**/eas.json"
+        ],
+        "dependenciesAny": [
+          "expo",
+          "react-native"
+        ]
+      },
+      "resolve": "eas-commands-v1",
+      "commands": {
+        "build-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=eas-cli",
+            "--",
+            "eas",
+            "build",
+            "--profile",
+            "${buildProfile}",
+            "--platform",
+            "${targetPlatform}"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "build-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "eas",
+            "build",
+            "--profile",
+            "${buildProfile}",
+            "--platform",
+            "${targetPlatform}"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "build-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "eas",
+            "build",
+            "--profile",
+            "${buildProfile}",
+            "--platform",
+            "${targetPlatform}"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "build-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "eas-cli",
+            "eas",
+            "build",
+            "--profile",
+            "${buildProfile}",
+            "--platform",
+            "${targetPlatform}"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "build-profile-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=eas-cli",
+            "--",
+            "eas",
+            "build",
+            "--profile",
+            "${buildProfile}"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "build-profile-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "eas",
+            "build",
+            "--profile",
+            "${buildProfile}"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "build-profile-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "eas",
+            "build",
+            "--profile",
+            "${buildProfile}"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "build-profile-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "eas-cli",
+            "eas",
+            "build",
+            "--profile",
+            "${buildProfile}"
+          ],
+          "origin": "configuration",
+          "review": true
+        }
+      }
+    }
+  ]
+}

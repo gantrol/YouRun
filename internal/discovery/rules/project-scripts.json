@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "project-scripts",
+  "ruleVersion": 1,
+  "rules": [{
+    "id": "entrypoints",
+    "match": {"files": [
+      "**/run.cmd", "**/start.cmd", "**/debug.cmd", "**/build.cmd", "**/release.cmd", "**/package.cmd",
+      "**/run.bat", "**/start.bat", "**/debug.bat", "**/build.bat", "**/release.bat", "**/package.bat",
+      "**/run.ps1", "**/start.ps1", "**/debug.ps1", "**/build.ps1", "**/release.ps1", "**/package.ps1",
+      "**/run.sh", "**/start.sh", "**/debug.sh", "**/build.sh", "**/release.sh", "**/package.sh"
+    ]},
+    "resolve": "project-script-v1",
+    "commands": {
+      "windows": {"tool": "${script}", "args": [], "origin": "template", "platform": "Windows", "review": true},
+      "shell": {"tool": "bash", "args": ["${script}"], "origin": "template", "platform": "macOS", "review": true}
+    }
+  }]
+}

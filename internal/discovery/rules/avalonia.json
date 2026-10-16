@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "avalonia",
+  "ruleVersion": 1,
+  "rules": [{
+    "id": "project",
+    "match": {"files": ["**/*.csproj", "**/*.fsproj", "**/*.vbproj"], "dependenciesAny": ["avalonia", "avalonia.desktop"]},
+    "resolve": "msbuild-v1",
+    "emit": {"frameworks": ["avalonia"]}
+  }]
+}

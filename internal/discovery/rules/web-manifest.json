@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "web-manifest",
+  "ruleVersion": 1,
+  "rules": [{
+    "id": "application",
+    "match": {"files": ["**/*.webmanifest", "**/manifest.json"]},
+    "resolve": "web-manifest-v1",
+    "emit": {
+      "frameworks": ["web-app"],
+      "names": [
+        {"field": ["name"], "origin": "declared"},
+        {"field": ["short_name"], "origin": "declared"}
+      ],
+      "icons": [{"field": ["src"], "base": "config", "purpose": "application", "origin": "declared", "precedence": 100}]
+    },
+    "options": {"webRoots": ["public", "static", "wwwroot"]}
+  }]
+}

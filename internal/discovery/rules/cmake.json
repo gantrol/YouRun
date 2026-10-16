@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"cmake","ruleVersion":1,"rules":[{"id":"project","match":{"files":["**/CMakeLists.txt","**/CMakePresets.json","**/CMakeUserPresets.json"]},"resolve":"cmake-v1","emit":{"frameworks":["cmake"]}}]}

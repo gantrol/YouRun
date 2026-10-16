@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "python",
+  "ruleVersion": 2,
+  "rules": [
+    {
+      "id": "project",
+      "match": {
+        "files": [
+          "**/pyproject.toml",
+          "**/requirements.txt"
+        ]
+      },
+      "resolve": "python-static-v1",
+      "emit": {
+        "frameworks": [
+          "python"
+        ],
+        "names": [
+          {
+            "field": [
+              "name"
+            ],
+            "origin": "declared"
+          }
+        ]
+      }
+    },
+    {
+      "id": "commands",
+      "match": {"files": ["**/pyproject.toml"]},
+      "resolve": "python-commands-v1",
+      "commands": {
+        "script": {"tool": "${scriptName}", "args": [], "origin": "configuration", "review": true},
+        "poetry-script": {"tool": "poetry", "args": ["run", "${scriptName}"], "origin": "configuration", "review": true},
+        "uv-script": {"tool": "uv", "args": ["run", "--", "${scriptName}"], "origin": "configuration", "review": true},
+        "build": {"tool": "python", "args": ["-m", "build"], "origin": "configuration", "review": true},
+        "poetry-build": {"tool": "poetry", "args": ["build"], "origin": "configuration", "review": true}
+      }
+    }
+  ]
+}

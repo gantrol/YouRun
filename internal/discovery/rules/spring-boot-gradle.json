@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "spring-boot-gradle",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "commands",
+      "match": {
+        "files": [
+          "**/build.gradle",
+          "**/build.gradle.kts"
+        ],
+        "pluginsAny": [
+          "org.springframework.boot"
+        ]
+      },
+      "resolve": "spring-boot-gradle-v1",
+      "commands": {
+        "boot-run": {
+          "tool": "${gradleTool}",
+          "args": [
+            "${modulePath}:bootRun"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "boot-jar": {
+          "tool": "${gradleTool}",
+          "args": [
+            "${modulePath}:bootJar"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "boot-war": {
+          "tool": "${gradleTool}",
+          "args": [
+            "${modulePath}:bootWar"
+          ],
+          "origin": "configuration",
+          "review": true
+        }
+      }
+    }
+  ]
+}

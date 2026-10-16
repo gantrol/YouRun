@@ -1,0 +1,323 @@
+{
+  "schemaVersion": 1,
+  "id": "react-native",
+  "ruleVersion": 2,
+  "rules": [
+    {
+      "id": "package",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "react-native"
+        ]
+      },
+      "resolve": "package-metadata-v1",
+      "emit": {
+        "frameworks": [
+          "react-native",
+          "react"
+        ]
+      },
+      "options": {
+        "configFiles": [
+          "app.json"
+        ]
+      }
+    },
+    {
+      "id": "application",
+      "match": {
+        "files": [
+          "**/app.json"
+        ],
+        "dependenciesAny": [
+          "react-native"
+        ]
+      },
+      "resolve": "json-app-v1",
+      "emit": {
+        "frameworks": [
+          "react-native"
+        ],
+        "names": [
+          {
+            "field": [
+              "displayName"
+            ],
+            "origin": "declared"
+          },
+          {
+            "field": [
+              "name"
+            ],
+            "origin": "declared"
+          }
+        ]
+      },
+      "options": {
+        "valueRoot": [
+          "expo"
+        ],
+        "configFiles": [
+          "app.config.json",
+          "app.json"
+        ],
+        "dynamicConfigFiles": [
+          "app.config.ts",
+          "app.config.js"
+        ]
+      }
+    },
+    {
+      "id": "commands",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "react-native"
+        ]
+      },
+      "resolve": "react-native-commands-v1",
+      "commands": {
+        "start-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=react-native",
+            "--",
+            "react-native",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "react-native",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "react-native",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "react-native",
+            "react-native",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "android-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=react-native",
+            "--",
+            "react-native",
+            "run-android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "android-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "react-native",
+            "run-android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "android-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "react-native",
+            "run-android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "android-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "react-native",
+            "react-native",
+            "run-android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "ios-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=react-native",
+            "--",
+            "react-native",
+            "run-ios"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "ios-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "react-native",
+            "run-ios"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "ios-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "react-native",
+            "run-ios"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "ios-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "react-native",
+            "react-native",
+            "run-ios"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-android-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=react-native",
+            "--",
+            "react-native",
+            "build-android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-android-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "react-native",
+            "build-android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-android-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "react-native",
+            "build-android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-android-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "react-native",
+            "react-native",
+            "build-android"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-ios-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=react-native",
+            "--",
+            "react-native",
+            "build-ios"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-ios-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "react-native",
+            "build-ios"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-ios-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "react-native",
+            "build-ios"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-ios-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "react-native",
+            "react-native",
+            "build-ios"
+          ],
+          "origin": "template",
+          "review": true
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "fastify",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "project",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "fastify"
+        ]
+      },
+      "resolve": "package-metadata-v1",
+      "emit": {
+        "frameworks": [
+          "fastify"
+        ]
+      }
+    }
+  ]
+}

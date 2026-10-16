@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "sveltekit",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "package",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "@sveltejs/kit"
+        ]
+      },
+      "resolve": "package-metadata-v1",
+      "emit": {
+        "frameworks": [
+          "sveltekit",
+          "svelte"
+        ],
+        "icons": [
+          {
+            "paths": [
+              "static/favicon.png"
+            ],
+            "base": "unit",
+            "purpose": "application",
+            "origin": "convention",
+            "precedence": 80
+          }
+        ]
+      }
+    }
+  ]
+}

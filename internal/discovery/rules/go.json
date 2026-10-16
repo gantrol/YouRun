@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"go","ruleVersion":1,"rules":[{"id":"module","match":{"files":["**/go.mod","**/go.work"]},"resolve":"go-v1","emit":{"frameworks":["go"]}}]}

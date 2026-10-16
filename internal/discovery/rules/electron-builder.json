@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "electron-builder",
+  "ruleVersion": 2,
+  "rules": [
+    {
+      "id": "package-config",
+      "match": {"files": ["**/package.json"]},
+      "resolve": "electron-builder-static-v1",
+      "emit": {
+        "frameworks": ["electron", "electron-builder"],
+        "names": [{"field": ["build", "productName"], "origin": "declared"}, {"field": ["productName"], "origin": "declared"}],
+        "icons": [
+          {"field": ["build", "win", "icon"], "base": "unit", "platform": "windows", "purpose": "application", "origin": "declared", "precedence": 200},
+          {"field": ["build", "mac", "icon"], "base": "unit", "platform": "darwin", "purpose": "application", "origin": "declared", "precedence": 200},
+          {"field": ["build", "linux", "icon"], "base": "unit", "platform": "linux", "purpose": "application", "origin": "declared", "precedence": 200},
+          {"field": ["build", "icon"], "base": "unit", "purpose": "application", "origin": "declared", "precedence": 150},
+          {"paths": ["icon.ico"], "base": "buildResourcesRoot", "platform": "windows", "purpose": "application", "origin": "convention", "precedence": 60},
+          {"paths": ["icon.icns"], "base": "buildResourcesRoot", "platform": "darwin", "purpose": "application", "origin": "convention", "precedence": 60},
+          {"paths": ["icon.png", "icon.svg"], "base": "buildResourcesRoot", "purpose": "application", "origin": "convention", "precedence": 50}
+        ]
+      },
+      "options": {
+        "configFiles": ["electron-builder.yml", "electron-builder.yaml", "electron-builder.json", "electron-builder.json5", "electron-builder.js", "electron-builder.cjs", "electron-builder.ts"],
+        "buildResourcesField": ["build", "directories", "buildResources"],
+        "defaultBuildResources": "build"
+      }
+    },
+    {
+      "id": "standalone-config",
+      "match": {"files": ["**/electron-builder.yml", "**/electron-builder.yaml", "**/electron-builder.json", "**/electron-builder.json5", "**/electron-builder.js", "**/electron-builder.cjs", "**/electron-builder.ts"]},
+      "resolve": "electron-builder-static-v1",
+      "emit": {
+        "frameworks": ["electron", "electron-builder"],
+        "names": [{"field": ["productName"], "origin": "declared"}],
+        "icons": [
+          {"field": ["win", "icon"], "base": "unit", "platform": "windows", "purpose": "application", "origin": "declared", "precedence": 200},
+          {"field": ["mac", "icon"], "base": "unit", "platform": "darwin", "purpose": "application", "origin": "declared", "precedence": 200},
+          {"field": ["linux", "icon"], "base": "unit", "platform": "linux", "purpose": "application", "origin": "declared", "precedence": 200},
+          {"field": ["icon"], "base": "unit", "purpose": "application", "origin": "declared", "precedence": 150},
+          {"paths": ["icon.ico"], "base": "buildResourcesRoot", "platform": "windows", "purpose": "application", "origin": "convention", "precedence": 60},
+          {"paths": ["icon.icns"], "base": "buildResourcesRoot", "platform": "darwin", "purpose": "application", "origin": "convention", "precedence": 60},
+          {"paths": ["icon.png", "icon.svg"], "base": "buildResourcesRoot", "purpose": "application", "origin": "convention", "precedence": 50}
+        ]
+      },
+      "options": {"buildResourcesField": ["directories", "buildResources"], "defaultBuildResources": "build"}
+    }
+  ]
+}

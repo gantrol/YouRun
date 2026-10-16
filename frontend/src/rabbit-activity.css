@@ -1,0 +1,93 @@
+.yourun-rabbit-activity {
+  --yourun-logo-fill: currentColor;
+  --yourun-logo-ink: currentColor;
+}
+
+.yourun-rabbit-activity > .yourun-logo {
+  position: relative;
+  z-index: 1;
+  overflow: visible;
+  transform-origin: 50% 88%;
+}
+
+.yourun-rabbit-activity::after {
+  content: "";
+  position: absolute;
+  bottom: 3%;
+  left: 22%;
+  width: 60%;
+  height: 7%;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.18;
+  transform-origin: center;
+}
+
+/* The whole cycle stays inside the icon's reserved space, including its shadow. */
+@media (prefers-reduced-motion: no-preference) {
+  .yourun-rabbit-activity[data-state="starting"][data-animate] > .yourun-logo {
+    animation: yourun-rabbit-launch 720ms ease-in-out both;
+  }
+
+  .yourun-rabbit-activity[data-state="running"][data-animate] > .yourun-logo {
+    animation: yourun-rabbit-hop 720ms ease-in-out both;
+  }
+
+  .yourun-rabbit-activity[data-state="stopping"][data-animate] > .yourun-logo {
+    animation: yourun-rabbit-land 280ms ease-out both;
+  }
+
+  .yourun-rabbit-activity[data-state="starting"][data-animate]::after {
+    animation: yourun-rabbit-launch-shadow 720ms ease-in-out both;
+  }
+
+  .yourun-rabbit-activity[data-state="running"][data-animate]::after {
+    animation: yourun-rabbit-hop-shadow 720ms ease-in-out both;
+  }
+
+  [data-skin="pixel"] .yourun-rabbit-activity > .yourun-logo,
+  [data-skin="pixel"] .yourun-rabbit-activity::after {
+    animation-timing-function: steps(4, end);
+  }
+}
+
+@keyframes yourun-rabbit-launch {
+  0%, 100% { transform: none; }
+  18% { transform: translateY(2%) scale(1.08, 0.86); }
+  38% { transform: translateY(-8%) scale(0.96, 1.04) rotate(-5deg); }
+  52% { transform: translateY(-12%) rotate(-3deg); }
+  72% { transform: translateY(2%) scale(1.06, 0.9); }
+  88% { transform: none; }
+}
+
+@keyframes yourun-rabbit-hop {
+  0%, 62%, 100% { transform: none; }
+  10% { transform: translateY(2%) scale(1.06, 0.9); }
+  24% { transform: translateY(-8%) scale(0.98, 1.02) rotate(-4deg); }
+  34% { transform: translateY(-10%) rotate(-2deg); }
+  48% { transform: translateY(2%) scale(1.05, 0.92); }
+}
+
+@keyframes yourun-rabbit-land {
+  0% { transform: translateY(-8%) rotate(-3deg); }
+  55% { transform: translateY(2%) scale(1.08, 0.86); }
+  100% { transform: none; }
+}
+
+@keyframes yourun-rabbit-launch-shadow {
+  0%, 18%, 72%, 100% { transform: scaleX(1); opacity: 0.18; }
+  48% { transform: scaleX(0.65); opacity: 0.08; }
+}
+
+@keyframes yourun-rabbit-hop-shadow {
+  0%, 10%, 48%, 100% { transform: scaleX(1); opacity: 0.18; }
+  30% { transform: scaleX(0.72); opacity: 0.08; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yourun-rabbit-activity > .yourun-logo,
+  .yourun-rabbit-activity::after {
+    animation: none;
+    transform: none;
+  }
+}

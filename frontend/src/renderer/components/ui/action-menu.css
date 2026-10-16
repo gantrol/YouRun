@@ -1,0 +1,24 @@
+.action-menu-content {
+  --action-menu-offset: -3px;
+  transform-origin: var(--radix-popper-transform-origin);
+}
+.action-menu-content[data-side="top"] { --action-menu-offset: 3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .action-menu-content[data-state="open"] {
+    animation: action-menu-enter 140ms var(--ease-out);
+  }
+  .action-menu-content[data-state="closed"] {
+    animation: action-menu-leave 100ms ease-in;
+    pointer-events: none;
+  }
+}
+@keyframes action-menu-enter {
+  from { opacity: 0; transform: translateY(var(--action-menu-offset)) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes action-menu-leave {
+  to { opacity: 0; transform: translateY(var(--action-menu-offset)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .action-menu-content[data-state] { animation: none; }
+}

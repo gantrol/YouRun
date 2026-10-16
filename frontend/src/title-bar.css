@@ -1,0 +1,28 @@
+/* Native host drag markers are confined to this component. */
+.command-title-bar {
+  --app-region: drag;
+}
+.command-title-bar button,
+.command-title-bar [data-window-no-drag] {
+  --app-region: no-drag;
+}
+[data-skin="comic"] .command-title-bar {
+  border-bottom: 2px solid var(--border-strong);
+}
+[data-skin="comic"] .command-title-bar h1 {
+  width: fit-content;
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+[data-skin="graphic"] .command-title-bar h1 {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+[data-skin="graphic"] .command-title-bar {
+  border-bottom-color: var(--border-strong);
+}
+[data-skin="pixel"] .command-title-bar {
+  border-bottom: 3px double var(--border-strong);
+  font-family: var(--font-mono);
+}

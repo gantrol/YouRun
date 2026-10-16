@@ -1,0 +1,340 @@
+{
+  "schemaVersion": 1,
+  "id": "nestjs",
+  "ruleVersion": 2,
+  "rules": [
+    {
+      "id": "project",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "@nestjs/core"
+        ]
+      },
+      "resolve": "package-metadata-v1",
+      "emit": {
+        "frameworks": [
+          "nestjs"
+        ]
+      }
+    },
+    {
+      "id": "commands",
+      "match": {
+        "files": [
+          "**/nest-cli.json"
+        ],
+        "dependenciesAny": [
+          "@nestjs/core"
+        ]
+      },
+      "resolve": "nest-cli-v1",
+      "commands": {
+        "build-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=@nestjs/cli",
+            "--",
+            "nest",
+            "build"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "nest",
+            "build"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "nest",
+            "build"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "@nestjs/cli",
+            "nest",
+            "build"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=@nestjs/cli",
+            "--",
+            "nest",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "nest",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "nest",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "@nestjs/cli",
+            "nest",
+            "start"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "watch-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=@nestjs/cli",
+            "--",
+            "nest",
+            "start",
+            "--watch"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "watch-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "nest",
+            "start",
+            "--watch"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "watch-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "nest",
+            "start",
+            "--watch"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "watch-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "@nestjs/cli",
+            "nest",
+            "start",
+            "--watch"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-project-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=@nestjs/cli",
+            "--",
+            "nest",
+            "build",
+            "${projectName}"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-project-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "nest",
+            "build",
+            "${projectName}"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-project-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "nest",
+            "build",
+            "${projectName}"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "build-project-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "@nestjs/cli",
+            "nest",
+            "build",
+            "${projectName}"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-project-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=@nestjs/cli",
+            "--",
+            "nest",
+            "start",
+            "${projectName}"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-project-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "nest",
+            "start",
+            "${projectName}"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-project-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "nest",
+            "start",
+            "${projectName}"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "start-project-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "@nestjs/cli",
+            "nest",
+            "start",
+            "${projectName}"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "watch-project-npm": {
+          "tool": "npm",
+          "args": [
+            "exec",
+            "--no",
+            "--offline",
+            "--package=@nestjs/cli",
+            "--",
+            "nest",
+            "start",
+            "${projectName}",
+            "--watch"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "watch-project-pnpm": {
+          "tool": "pnpm",
+          "args": [
+            "exec",
+            "nest",
+            "start",
+            "${projectName}",
+            "--watch"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "watch-project-yarn": {
+          "tool": "yarn",
+          "args": [
+            "exec",
+            "nest",
+            "start",
+            "${projectName}",
+            "--watch"
+          ],
+          "origin": "template",
+          "review": true
+        },
+        "watch-project-bun": {
+          "tool": "bun",
+          "args": [
+            "x",
+            "--no-install",
+            "--package",
+            "@nestjs/cli",
+            "nest",
+            "start",
+            "${projectName}",
+            "--watch"
+          ],
+          "origin": "template",
+          "review": true
+        }
+      }
+    }
+  ]
+}

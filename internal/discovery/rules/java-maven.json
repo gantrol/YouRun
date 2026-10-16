@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "java-maven",
+  "ruleVersion": 1,
+  "rules": [{
+    "id": "commands",
+    "match": {"files": ["**/pom.xml"]},
+    "resolve": "maven-commands-v1",
+    "commands": {
+      "package": {"tool": "${mavenTool}", "args": ["-f", "${pomFile}", "package"], "origin": "configuration", "review": true},
+      "exec-java": {"tool": "${mavenTool}", "args": ["-f", "${pomFile}", "compile", "exec:java"], "origin": "configuration", "review": true}
+    }
+  }]
+}

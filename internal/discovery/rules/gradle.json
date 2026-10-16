@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "gradle",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "commands",
+      "match": {
+        "files": [
+          "**/build.gradle",
+          "**/build.gradle.kts"
+        ],
+        "pluginsAny": [
+          "java",
+          "java-library",
+          "application",
+          "war",
+          "org.jetbrains.kotlin.jvm"
+        ]
+      },
+      "resolve": "gradle-java-v1",
+      "commands": {
+        "build": {
+          "tool": "${gradleTool}",
+          "args": [
+            "${modulePath}:build"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "test": {
+          "tool": "${gradleTool}",
+          "args": [
+            "${modulePath}:test"
+          ],
+          "origin": "configuration",
+          "review": true
+        },
+        "run": {
+          "tool": "${gradleTool}",
+          "args": [
+            "${modulePath}:run"
+          ],
+          "origin": "configuration",
+          "review": true
+        }
+      }
+    }
+  ]
+}

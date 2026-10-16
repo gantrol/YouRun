@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "ios-xcode",
+  "ruleVersion": 1,
+  "rules": [{
+    "id": "configured-ios",
+    "match": {"files": ["**/xcshareddata/xcschemes/*.xcscheme", "**/*.xcodeproj/project.pbxproj"]},
+    "resolve": "ios-xcode-commands-v1",
+    "commands": {
+      "project-simulator": {"tool": "xcodebuild", "args": ["-project", "./${container}", "-scheme", "${scheme}", "-configuration", "${configuration}", "-destination", "generic/platform=iOS Simulator", "build"], "origin": "configuration", "platform": "macOS", "review": true},
+      "project-device": {"tool": "xcodebuild", "args": ["-project", "./${container}", "-scheme", "${scheme}", "-configuration", "${configuration}", "-destination", "generic/platform=iOS", "build"], "origin": "configuration", "platform": "macOS", "review": true},
+      "workspace-simulator": {"tool": "xcodebuild", "args": ["-workspace", "./${container}", "-scheme", "${scheme}", "-configuration", "${configuration}", "-destination", "generic/platform=iOS Simulator", "build"], "origin": "configuration", "platform": "macOS", "review": true},
+      "workspace-device": {"tool": "xcodebuild", "args": ["-workspace", "./${container}", "-scheme", "${scheme}", "-configuration", "${configuration}", "-destination", "generic/platform=iOS", "build"], "origin": "configuration", "platform": "macOS", "review": true},
+      "target-simulator": {"tool": "xcodebuild", "args": ["-project", "./${container}", "-target", "${target}", "-configuration", "${configuration}", "-sdk", "iphonesimulator", "build"], "origin": "configuration", "platform": "macOS", "review": true},
+      "target-device": {"tool": "xcodebuild", "args": ["-project", "./${container}", "-target", "${target}", "-configuration", "${configuration}", "-sdk", "iphoneos", "build"], "origin": "configuration", "platform": "macOS", "review": true},
+      "simulator-launch": {"tool": "xcrun", "args": ["simctl", "launch", "booted", "${bundleID}"], "origin": "configuration", "platform": "macOS", "review": true}
+    }
+  }]
+}

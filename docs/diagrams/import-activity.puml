@@ -1,0 +1,37 @@
+@startuml
+!pragma layout smetana
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam roundcorner 0
+title YouRun · React 项目导入
+start
+:选择目录或已有项目;
+if (取消?) then (是)
+  stop
+endif
+:POST /api/discover;
+:加载规则，静态扫描命令与元数据;
+if (扫描失败?) then (是)
+  :显示错误，允许重试;
+  stop
+endif
+:显示候选与扫描问题;
+:排除已保存命令\n需复核候选默认不选;
+:用户选择命令、名称、按钮与图标;
+if (确认保存?) then (否)
+  stop
+endif
+:读取最新定义，合并草稿;
+:PUT /api/definitions\n检查修订号并提交事务;
+if (冲突无法合并或保存失败?) then (是)
+  :保留草稿，刷新并提示错误;
+  stop
+endif
+:POST /api/project-metadata\n保存目录与图标选择;
+if (元数据保存成功?) then (是)
+  :完成导入;
+else (否)
+  :保留已提交项目与命令\n记录待恢复项，允许单独重试元数据;
+endif
+stop
+@enduml

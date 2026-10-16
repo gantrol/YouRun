@@ -1,0 +1,79 @@
+@startuml
+' Graphviz respects node/rank spacing for the labeled dependencies.
+skinparam defaultFontName "Microsoft YaHei"
+skinparam shadowing false
+skinparam roundcorner 0
+skinparam componentStyle uml2
+skinparam nodesep 55
+skinparam ranksep 80
+skinparam ArrowColor #64748B
+skinparam ArrowFontColor #475569
+skinparam packageBackgroundColor #FFFFFF
+skinparam packageBorderColor #CBD5E1
+skinparam component {
+  BackgroundColor #F8FAFC
+  BorderColor #64748B
+  BackgroundColor<<Desktop>> #FFF7ED
+  BorderColor<<Desktop>> #B45309
+  FontColor<<Desktop>> #92400E
+  BackgroundColor<<CLI>> #F0FDFA
+  BorderColor<<CLI>> #0F766E
+  FontColor<<CLI>> #115E59
+}
+hide stereotype
+top to bottom direction
+title YouRun · 组件
+package "React / shadcn 界面" {
+  [View] as View <<Desktop>>
+  [ViewModel] as VM <<Desktop>>
+  [Repository / API] as Repo <<Desktop>>
+  View -[#B45309]-> VM
+  VM -[#B45309]-> Repo
+}
+package "MyGo 原生界面" {
+  [Native View] as Native <<Desktop>>
+  [Workspace / RunOutput ViewModel] as NativeVM <<Desktop>>
+  [workspaceRepository] as NativeRepo <<Desktop>>
+  Native -[#B45309]-> NativeVM
+  NativeVM -[#B45309]-> NativeRepo
+}
+[CLI · cmd/manager] as CLI <<CLI>>
+package "共享 Go 核心" {
+  [desktop.Host] as Host <<Desktop>>
+  [workspace.Service] as Workspace
+  [discovery] as Discovery
+  [projectmeta] as Metadata
+  [database.Store] as Store
+  [engine.Client] as Client
+}
+[单次执行器\nengine.ExecuteRun] as Worker
+database SQLite
+folder "执行文件 / 日志" as Files
+Repo -[#B45309]-> Host : HTTP + SSE
+NativeRepo -[#B45309]-> Host : HTTP + SSE
+CLI -[#0F766E]-> Workspace : 定义 / 已保存命令
+CLI -[#0F766E]-> Client : 直接执行 / 停止 / 日志
+CLI -[#0F766E]-> Discovery
+CLI -[#0F766E]-> Metadata
+Host -[#B45309]-> Workspace
+Host -[#B45309]-> Client : 活动 / 停止 / 日志
+Host -[#B45309]-> Discovery
+Host -[#B45309]-> Metadata
+Host -[#B45309]-> Store : 设置
+Workspace --> Store
+Workspace --> Client : 进程内 Request
+Workspace --> Discovery : /api/import 兼容入口
+Metadata --> Store
+Store --> SQLite
+Client --> Files : 读取状态 / 写入请求
+Client ..> Worker : 启动 _execute
+Worker --> Files : 状态与控制
+Host .[#B45309].> Files : 文件变化 / 退出通知
+legend bottom
+  <color:#B45309>■ 桌面端</color>    <color:#0F766E>■ CLI</color>    <color:#64748B>■ 共享核心 / 执行器</color>
+endlegend
+note bottom of Worker
+  不打开 SQLite；不提供 HTTP 服务
+  命令 stdout/stderr 直接写日志文件
+end note
+@enduml

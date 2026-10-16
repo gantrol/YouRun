@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"swift-package","ruleVersion":1,"rules":[{"id":"manifest","match":{"files":["**/Package.swift"]},"resolve":"swift-v1","emit":{"frameworks":["swift"]}}]}

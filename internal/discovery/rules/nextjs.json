@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "nextjs",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "package",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "next"
+        ]
+      },
+      "resolve": "package-metadata-v1",
+      "emit": {
+        "frameworks": [
+          "nextjs"
+        ],
+        "icons": [
+          {
+            "paths": [
+              "app/icon.svg",
+              "app/icon.png",
+              "app/icon.ico",
+              "app/icon.jpg",
+              "app/icon.jpeg",
+              "app/favicon.ico",
+              "src/app/icon.svg",
+              "src/app/icon.png",
+              "src/app/icon.ico",
+              "src/app/icon.jpg",
+              "src/app/icon.jpeg",
+              "src/app/favicon.ico"
+            ],
+            "base": "unit",
+            "purpose": "application",
+            "origin": "declared",
+            "precedence": 80
+          }
+        ]
+      },
+      "options": {
+        "configFiles": [
+          "app/manifest.json",
+          "app/manifest.webmanifest",
+          "src/app/manifest.json",
+          "src/app/manifest.webmanifest"
+        ]
+      }
+    }
+  ]
+}

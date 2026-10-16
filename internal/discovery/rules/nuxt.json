@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "nuxt",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "package",
+      "match": {
+        "files": [
+          "**/package.json"
+        ],
+        "dependenciesAny": [
+          "nuxt"
+        ]
+      },
+      "resolve": "package-metadata-v1",
+      "emit": {
+        "frameworks": [
+          "nuxt"
+        ],
+        "icons": [
+          {
+            "paths": [
+              "public/favicon.ico",
+              "static/favicon.ico"
+            ],
+            "base": "unit",
+            "purpose": "application",
+            "origin": "convention",
+            "precedence": 80
+          }
+        ]
+      }
+    }
+  ]
+}

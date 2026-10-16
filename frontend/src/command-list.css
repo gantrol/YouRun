@@ -1,0 +1,2 @@
+.command-row-context { flex: 0 1 38%; max-width: 38%; }
+@container command-list (max-width: 520px) { .command-row-context { display: none; } }

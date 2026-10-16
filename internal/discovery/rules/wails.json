@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "wails",
+  "ruleVersion": 1,
+  "rules": [
+    {
+      "id": "module",
+      "match": {"files": ["**/go.mod"], "dependenciesAny": ["github.com/wailsapp/wails/v2", "github.com/wailsapp/wails/v3"]},
+      "resolve": "go-module-metadata-v1",
+      "emit": {
+        "frameworks": ["wails", "go"],
+        "icons": [{"paths": ["build/appicon.png"], "base": "unit", "purpose": "application", "origin": "convention", "precedence": 40}]
+      },
+      "options": {"configFiles": ["wails.json"]}
+    },
+    {
+      "id": "v2-config",
+      "match": {"files": ["**/wails.json"]},
+      "resolve": "json-app-v1",
+      "emit": {
+        "frameworks": ["wails", "go"],
+        "names": [{"field": ["info", "productName"], "origin": "declared"}, {"field": ["name"], "origin": "declared"}],
+        "icons": [
+          {"paths": ["windows/icon.ico"], "base": "buildResourcesRoot", "platform": "windows", "purpose": "application", "origin": "convention", "precedence": 80},
+          {"paths": ["appicon.png"], "base": "buildResourcesRoot", "purpose": "application", "origin": "convention", "precedence": 70}
+        ]
+      },
+      "options": {"buildResourcesField": ["build:dir"], "defaultBuildResources": "build"}
+    }
+  ]
+}

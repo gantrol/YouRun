@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "dotnet-maui",
+  "ruleVersion": 2,
+  "rules": [{
+    "id": "project",
+    "match": {"files": ["**/*.csproj", "**/*.fsproj", "**/*.vbproj"], "propertyEquals": {"UseMaui": "true"}},
+    "resolve": "msbuild-v1",
+    "emit": {
+      "frameworks": ["dotnet-maui"],
+      "icons": [{"field": ["MauiIcon"], "base": "unit", "purpose": "application", "origin": "declared", "precedence": 150}]
+    }
+  }, {
+    "id": "configured-commands",
+    "match": {"files": ["**/*.csproj", "**/*.fsproj", "**/*.vbproj"], "propertyEquals": {"UseMaui": "true"}},
+    "resolve": "dotnet-config-commands-v1",
+    "commands": {
+      "run-target": {"tool": "dotnet", "args": ["build", "./${file}", "-t:Run", "-f", "${framework}"], "origin": "configuration", "review": true}
+    }
+  }]
+}

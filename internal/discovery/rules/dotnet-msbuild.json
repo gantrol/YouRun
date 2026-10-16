@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "dotnet-msbuild",
+  "ruleVersion": 1,
+  "rules": [{
+    "id": "project",
+    "match": {"files": ["**/*.csproj", "**/*.fsproj", "**/*.vbproj", "**/*.vcxproj", "**/*.sln", "**/*.slnx"]},
+    "resolve": "msbuild-v1",
+    "emit": {
+      "frameworks": ["msbuild"],
+      "names": [
+        {"field": ["Product"], "origin": "declared"},
+        {"field": ["AssemblyName"], "origin": "declared"},
+        {"field": ["RootNamespace"], "origin": "declared"}
+      ],
+      "icons": [{"field": ["ApplicationIcon"], "base": "unit", "platform": "windows", "purpose": "application", "origin": "declared", "precedence": 100}]
+    },
+    "commands": {
+      "solution-build": {"tool": "MSBuild", "args": ["${file}", "/t:Build", "/p:Configuration=Release"], "origin": "template", "platform": "Windows", "review": true},
+      "native-build": {"tool": "MSBuild", "args": ["${file}", "/t:Build", "/p:Configuration=${configuration}", "/p:Platform=${platform}"], "origin": "template", "platform": "Windows"},
+      "native-build-default": {"tool": "MSBuild", "args": ["${file}", "/t:Build"], "origin": "template", "platform": "Windows", "review": true},
+      "legacy-build": {"tool": "MSBuild", "args": ["${file}", "/t:Build", "/p:Configuration=Release"], "origin": "template", "platform": "Windows", "review": true},
+      "build": {"tool": "dotnet", "args": ["build", "./${file}", "-c", "Release"], "origin": "template"},
+      "test": {"tool": "dotnet", "args": ["test", "./${file}"], "origin": "template"},
+      "run": {"tool": "dotnet", "args": ["run", "--project", "./${file}"], "origin": "template"},
+      "publish": {"tool": "dotnet", "args": ["publish", "./${file}", "-c", "Release"], "origin": "template", "review": true}
+    }
+  }]
+}

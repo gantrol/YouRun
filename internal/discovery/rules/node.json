@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "node",
+  "ruleVersion": 1,
+  "rules": [{
+    "id": "package",
+    "match": {"files": ["**/package.json"]},
+    "resolve": "node-v1",
+    "emit": {
+      "frameworks": ["node"],
+      "names": [{"field": ["name"], "origin": "declared"}],
+      "icons": [{"field": ["icon"], "base": "unit", "purpose": "application", "origin": "declared", "precedence": 100}]
+    },
+    "commands": {"script": {"tool": "${packageManager}", "args": ["run", "${scriptName}"], "origin": "configuration"}},
+    "options": {
+      "packageManagers": ["npm", "pnpm", "yarn", "bun"],
+      "defaultManager": "npm",
+      "lockfiles": {"package-lock.json": "npm", "npm-shrinkwrap.json": "npm", "pnpm-lock.yaml": "pnpm", "yarn.lock": "yarn", "bun.lock": "bun", "bun.lockb": "bun"}
+    }
+  }]
+}
