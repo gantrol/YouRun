@@ -1,8 +1,8 @@
 ![YouRun：奔跑的黄色兔子与并行的命令轨道](docs/images/yourun-cover.png)
 
-# YouRun
+[![English | Click here](docs/images/badges/en-US.svg)](README.md)[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-8A9E77?style=flat-square)](LICENSE)
 
-[![English | Click here](docs/images/badges/en-US.svg)](README.md)
+[![通过 Microsoft Store 获取](docs/images/badges/ms-store-zh.svg)](https://apps.microsoft.com/store/detail/9MWXXGC8H67D?cid=DevShareMCLPCS)
 
 基于[MyGo](https://github.com/egoist/mygo)，做出YouRun。集中管理各种项目的开发、运行与打包，用户或Agent可以在一个地方启动、停止、查看输出。即使YouRun被关闭或异常退出，已启动的命令仍可以独立运行。
 ![YouRun 项目列表界面](docs/images/yourun-projects-screenshot.png)

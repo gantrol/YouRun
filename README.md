@@ -1,8 +1,8 @@
 ![YouRun: a running yellow rabbit and parallel command tracks](docs/images/yourun-cover.png)
 
-# YouRun
+[![中文 | 点我](docs/images/badges/zh-CN.svg)](README.zh-CN.md)[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-8A9E77?style=flat-square)](LICENSE)
 
-[![中文 | 点我](docs/images/badges/zh-CN.svg)](README.zh-CN.md)[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-8A9E77?style=flat-square)](LICENSE)[![Platform: Windows x64](https://img.shields.io/badge/platform-Windows%20x64-F2CA52?style=flat-square)](#current-support)
+[![Download from Microsoft Store](docs/images/badges/ms-store-en.svg)](https://apps.microsoft.com/store/detail/9MWXXGC8H67D?cid=DevShareMCLPCS)
 
 Built with [MyGo](https://github.com/egoist/mygo), YouRun brings development, run, and packaging commands from different projects together. Users and agents can start commands, stop them, and inspect their output in one place. Even if YouRun is closed or crashes, commands it has already started can keep running independently.
 
