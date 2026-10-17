@@ -195,7 +195,7 @@ for (const framework of frameworks) {
   const cli = path.join(folder, target === "windows" ? "yourun.cmd" : "yourun");
   await writeFile(cli, target === "windows"
     ? `@echo off\r\nsetlocal DisableDelayedExpansion\r\n"%~dp0${executable}" cli %*\r\nexit /b %errorlevel%\r\n`
-    : `#!/bin/sh\nexec "$(dirname "$0")/${executable}" cli "$@"\n`, { flag: "wx" });
+    : `#!/bin/sh\ntarget=$0\nwhile [ -L "$target" ]; do\n  dir=$(CDPATH= cd -- "$(dirname -- "$target")" && pwd)\n  target=$(readlink "$target")\n  case "$target" in\n    /*) ;;\n    *) target="$dir/$target" ;;\n  esac\ndone\ndir=$(CDPATH= cd -- "$(dirname -- "$target")" && pwd)\nexec "$dir/${executable}" cli "$@"\n`, { flag: "wx" });
   if (target === "darwin") {
     await chmod(path.join(folder, executable), 0o755);
     await chmod(cli, 0o755);

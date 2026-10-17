@@ -9,7 +9,7 @@ import (
 
 func CLIName() string {
 	if runtime.GOOS == "windows" {
-		return "yourun.exe"
+		return "yourun.cmd"
 	}
 	return "yourun"
 }
@@ -20,6 +20,9 @@ func resolveExecutor(source string) (string, error) {
 	source, err := filepath.Abs(source)
 	if err != nil {
 		return "", err
+	}
+	if resolved, err := filepath.EvalSymlinks(source); err == nil {
+		source = resolved
 	}
 	info, err := buildinfo.ReadFile(source)
 	if err != nil {

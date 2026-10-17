@@ -119,7 +119,7 @@ export function CommandEditor({
   onCancel,
   autoFocus = true,
   defaultDirectory = "",
-  currentPlatform = /Mac/i.test(navigator.userAgent) ? "darwin" : "windows",
+  currentPlatform = /Mac/i.test(navigator.userAgent) ? "darwin" : /Linux/i.test(navigator.userAgent) ? "linux" : "windows",
   onBusy,
 }: {
   autoFocus?: boolean;
@@ -300,7 +300,9 @@ export function CommandEditor({
             ["PowerShell", "PowerShell"],
             ["zsh", "zsh"],
             ["bash", "bash"],
-            ["cmd", "cmd"],
+            ...((currentPlatform === "windows" || platform === "Windows" || shell === "cmd") && platform !== "macOS"
+              ? ([["cmd", "cmd"]] as [string, string][])
+              : []),
           ]}
           onChange={setShell}
         />

@@ -415,11 +415,14 @@ func (a *app) commandRow(c *ui.Context, cmd engine.Command) {
 	})
 	a.commandFeedback(c.Key("issue-"+cmd.ID), cmd)
 }
+func commandUnavailable(cmd engine.Command) bool {
+	return (cmd.Platform == "Windows" && runtime.GOOS != "windows") || (cmd.Platform == "macOS" && runtime.GOOS == "windows")
+}
 func (a *app) actions(c *ui.Context, cmd engine.Command, icon string) {
 	run := a.running(cmd.ID)
 	ui.Row(c).Shrink(0).Gap(8).AlignItems(ui.Center).Children(func() {
 		if run == nil {
-			if a.icon(c.Key("launch"), icon, cmd.Title+" · "+a.m("start"), false) {
+			if a.icon(c.Key("launch"), icon, cmd.Title+" · "+a.m("start"), commandUnavailable(cmd)) {
 				a.launch(cmd, false)
 			}
 			return

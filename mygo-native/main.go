@@ -35,13 +35,15 @@ func main() {
 	a := newApp(host)
 	defer a.cancel()
 	mygo.App.SetName(a.m("productName"))
-	mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
-		{Role: mygo.RoleAppMenu, Submenu: []*mygo.MenuItem{
-			{Role: mygo.RoleAbout}, mygo.Separator(), {Role: mygo.RoleServices},
-			mygo.Separator(), {Role: mygo.RoleQuit},
-		}},
-		{Role: mygo.RoleEditMenu}, {Role: mygo.RoleWindowMenu},
-	}))
+	if runtime.GOOS == "darwin" {
+		mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
+			{Role: mygo.RoleAppMenu, Submenu: []*mygo.MenuItem{
+				{Role: mygo.RoleAbout}, mygo.Separator(), {Role: mygo.RoleServices},
+				mygo.Separator(), {Role: mygo.RoleQuit},
+			}},
+			{Role: mygo.RoleEditMenu}, {Role: mygo.RoleWindowMenu},
+		}))
+	}
 	mygo.App.WhenReady(func() {
 		a.win = mygo.NewWindow(mygo.WindowOptions{
 			Title: a.m("productName") + " · MyGo Native", Width: 528, Height: 720, MinWidth: 360, MinHeight: 420,

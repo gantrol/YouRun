@@ -23,7 +23,7 @@ export function onThisDevice(command: Command, platform: string): Command {
   return {
     ...command,
     unavailable:
-      (command.platform === "macOS" && platform !== "darwin") ||
+      (command.platform === "macOS" && platform === "windows") ||
       (command.platform === "Windows" && platform !== "windows"),
   };
 }

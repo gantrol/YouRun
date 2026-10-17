@@ -117,6 +117,11 @@ No GUI, resident service, connection approval, or interactive stdin is required.
 			if err != nil {
 				return err
 			}
+		} else {
+			targetDir, err = filepath.Abs(targetDir)
+			if err != nil {
+				return errors.New("invalidDirectory")
+			}
 		}
 		rules, rulesErr := discovery.LoadRegistry(filepath.Join(*dir, "discovery-rules"))
 		if rulesErr != nil {

@@ -2,10 +2,18 @@
 
 package desktop
 
-import "os/exec"
+import (
+	"os/exec"
+	"runtime"
+)
 
 func openProjectDirectory(directory string) error {
-	cmd := exec.Command("/usr/bin/open", "-a", "Finder", directory)
+	var cmd *exec.Cmd
+	if runtime.GOOS == "darwin" {
+		cmd = exec.Command("/usr/bin/open", "-a", "Finder", directory)
+	} else {
+		cmd = exec.Command("xdg-open", directory)
+	}
 	if err := cmd.Start(); err != nil {
 		return err
 	}

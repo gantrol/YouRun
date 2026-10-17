@@ -1,6 +1,7 @@
 package main
 
 import (
+	"runtime"
 	"slices"
 	"strings"
 
@@ -145,7 +146,11 @@ func (a *app) commandEditor(c *ui.Context) {
 			cmd.Project = &projectID
 		}
 	}
-	a.selectField(c, "shell", &cmd.Shell, []option{{"default", a.m("defaultShell")}, {"PowerShell", "PowerShell"}, {"zsh", "zsh"}, {"bash", "bash"}, {"cmd", "cmd"}})
+	shellOptions := []option{{"default", a.m("defaultShell")}, {"PowerShell", "PowerShell"}, {"zsh", "zsh"}, {"bash", "bash"}}
+	if (runtime.GOOS == "windows" || cmd.Platform == "Windows" || cmd.Shell == "cmd") && cmd.Platform != "macOS" {
+		shellOptions = append(shellOptions, option{"cmd", "cmd"})
+	}
+	a.selectField(c, "shell", &cmd.Shell, shellOptions)
 	a.selectField(c, "platform", &cmd.Platform, []option{{"macOS / Windows", a.m("allPlatforms")}, {"macOS", "macOS"}, {"Windows", "Windows"}})
 	a.selectField(c, "buttonIcon", &cmd.Icon, a.iconOptions())
 	ui.Text(c, a.m("inputFields")).FontSize(12).TextColor(a.theme.TextMuted)

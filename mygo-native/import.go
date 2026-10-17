@@ -43,7 +43,7 @@ func (a *app) scanProjectDirectory(directory string) {
 			a.importScanned = true
 			a.checked = map[string]bool{}
 			for _, item := range result.Candidates {
-				if !item.Review && !a.imported(item) {
+				if !item.Review && !a.imported(item) && !commandUnavailable(engine.Command{Platform: item.Platform}) {
 					a.checked[item.ID] = true
 				}
 			}

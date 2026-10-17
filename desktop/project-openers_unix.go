@@ -72,6 +72,19 @@ func discoverProjectOpeners(ctx context.Context) []ProjectOpener {
 				result = append(result, ProjectOpener{ID: t.id, Name: t.name, path: path, kind: "app"})
 			}
 		}
+	} else {
+		for _, t := range []struct{ id, name, command string }{
+			{"ghostty", "Ghostty", "ghostty"},
+			{"warp", "Warp", "warp-terminal"},
+			{"kitty", "Kitty", "kitty"},
+			{"alacritty", "Alacritty", "alacritty"},
+			{"wezterm", "WezTerm", "wezterm"},
+			{"terminal", "Terminal", "x-terminal-emulator"},
+		} {
+			if path := commandPath(t.command); path != "" {
+				result = append(result, ProjectOpener{ID: t.id, Name: t.name, path: path, kind: "terminal"})
+			}
+		}
 	}
 	return result
 }
@@ -124,6 +137,8 @@ end run`
 		} else if opener.kind == "app" || strings.HasSuffix(strings.ToLower(opener.path), ".app") {
 			cmd = exec.Command("/usr/bin/open", "-a", opener.path, directory)
 		}
+	} else if opener.kind == "terminal" {
+		cmd = exec.Command(opener.path)
 	}
 	cmd.Dir = directory
 	return startProjectOpener(cmd)

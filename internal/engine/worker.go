@@ -133,7 +133,7 @@ func ExecuteRun(directory, id string) error {
 		return finish("stopped", nil, nil)
 	}
 	e := manifest.Execution
-	cmd, _, err := shellCommand(Command{Text: e.Text, Shell: e.Shell, Fields: e.Fields}, Launch{Directory: e.Directory, Values: e.Values})
+	cmd, _, err := shellCommand(Command{Text: e.Text, Shell: e.Shell, Platform: e.Platform, Fields: e.Fields}, Launch{Directory: e.Directory, Values: e.Values})
 	if err != nil {
 		return finish("failed", nil, err)
 	}

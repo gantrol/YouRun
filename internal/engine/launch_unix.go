@@ -13,7 +13,12 @@ type independentProcess struct {
 }
 
 func startIndependent(cmd *exec.Cmd, log *os.File) (*independentProcess, *processGroup, error) {
-	cmd.Stdout, cmd.Stderr = log, log
+	input, err := os.Open(os.DevNull)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer input.Close()
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = input, log, log
 	if err := cmd.Start(); err != nil {
 		return nil, nil, err
 	}

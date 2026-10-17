@@ -19,12 +19,21 @@ type processGroup struct{ pid int }
 func attachProcess(cmd *exec.Cmd) (*processGroup, error) {
 	return &processGroup{pid: cmd.Process.Pid}, nil
 }
-func (g *processGroup) stop() error { return syscall.Kill(-g.pid, syscall.SIGKILL) }
-func (g *processGroup) close()      {}
+func (g *processGroup) stop() error {
+	err := syscall.Kill(-g.pid, syscall.SIGKILL)
+	if errors.Is(err, syscall.ESRCH) {
+		return nil
+	}
+	return err
+}
+func (g *processGroup) close() {}
 func (g *processGroup) alive() (bool, error) {
 	err := syscall.Kill(-g.pid, 0)
 	if errors.Is(err, syscall.ESRCH) {
 		return false, nil
+	}
+	if errors.Is(err, syscall.EPERM) {
+		return true, nil
 	}
 	return err == nil, err
 }

@@ -279,7 +279,7 @@ func availableOnCurrentPlatform(platform string) bool {
 	case "Windows":
 		return runtime.GOOS == "windows"
 	case "macOS":
-		return runtime.GOOS == "darwin"
+		return runtime.GOOS != "windows"
 	default:
 		return true
 	}

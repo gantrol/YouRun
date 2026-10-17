@@ -107,7 +107,7 @@ export function recommendLaunchButtons(
   const groups = new Map<string, Ranked[]>();
   for (const command of commands) {
     if (command.hidden || command.unavailable || command.fields?.length || !command.directory.trim()) continue;
-    if ((command.platform === "Windows" && platform !== "windows") || (command.platform === "macOS" && platform !== "darwin")) continue;
+    if ((command.platform === "Windows" && platform !== "windows") || (command.platform === "macOS" && platform === "windows")) continue;
     const match = rank(command);
     if (!match) continue;
     const directory = pathKey(command.directory);

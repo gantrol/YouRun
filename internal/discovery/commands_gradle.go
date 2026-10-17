@@ -172,15 +172,19 @@ func (s *scan) gradleProject(path string) *gradleProject {
 		}
 	}
 	project.aliases = s.gradleAliases(project.root, settingsNodes)
-	wrapper := "gradlew"
-	project.platform = "macOS"
-	if runtime.GOOS == "windows" {
-		wrapper, project.platform = "gradlew.bat", "Windows"
-	}
-	if s.entries[filepath.Join(project.root, wrapper)] {
-		project.tool = "./" + wrapper
-	} else {
-		project.platform = ""
+	hasUnix := s.entries[filepath.Join(project.root, "gradlew")]
+	hasWin := s.entries[filepath.Join(project.root, "gradlew.bat")]
+	switch {
+	case hasUnix && hasWin:
+		if runtime.GOOS == "windows" {
+			project.tool = "./gradlew.bat"
+		} else {
+			project.tool = "./gradlew"
+		}
+	case hasWin:
+		project.tool, project.platform = "./gradlew.bat", "Windows"
+	case hasUnix:
+		project.tool, project.platform = "./gradlew", "macOS"
 	}
 	return project
 }

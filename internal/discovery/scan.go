@@ -396,11 +396,14 @@ func commandPhase(rule Rule) int {
 
 var safeArg = regexp.MustCompile(`^[A-Za-z0-9_./:@=,+-]+$`)
 
-func quote(arg string) string {
+func quote(arg, platform string) string {
 	if safeArg.MatchString(arg) && !strings.HasPrefix(arg, "~") {
 		return arg
 	}
-	if runtime.GOOS == "windows" {
+	if !strings.ContainsAny(arg, "\"$`\\%!") {
+		return `"` + arg + `"`
+	}
+	if platform == "Windows" || (platform != "macOS" && runtime.GOOS == "windows") {
 		return "'" + strings.ReplaceAll(arg, "'", "''") + "'"
 	}
 	return "'" + strings.ReplaceAll(arg, "'", "'\"'\"'") + "'"
@@ -416,7 +419,7 @@ func (s *scan) add(path, dir, tool, origin, platform string, review bool, args .
 			s.issue(path, "scanInvalidManifest")
 			return
 		}
-		parts = append(parts, quote(arg))
+		parts = append(parts, quote(arg, platform))
 	}
 	text := strings.Join(parts, " ")
 	if len(text) > 8000 {
@@ -442,9 +445,12 @@ func (s *scan) add(path, dir, tool, origin, platform string, review bool, args .
 	if platform == "" {
 		platform = "macOS / Windows"
 	}
-	shell := "zsh"
-	if runtime.GOOS == "windows" {
+	shell := "default"
+	switch platform {
+	case "Windows":
 		shell = "PowerShell"
+	case "macOS":
+		shell = "zsh"
 	}
 	s.result.Candidates = append(s.result.Candidates, Candidate{ID: hex.EncodeToString(digest[:]), Title: title, Text: text, Source: filepath.Join(s.result.Directory, path), Directory: filepath.Join(s.result.Directory, dir), Tool: tool, Origin: origin, Review: review, Shell: shell, Platform: platform, Icon: "play"})
 }

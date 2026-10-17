@@ -94,13 +94,19 @@ func (s *scan) mavenCommands(path string, data []byte, rule Rule) error {
 }
 
 func (s *scan) mavenLauncher(path string) (tool, dir, platform string) {
-	name, platform := "mvnw", "macOS"
-	if runtime.GOOS == "windows" {
-		name, platform = "mvnw.cmd", "Windows"
-	}
 	for directory := filepath.Dir(path); ; directory = filepath.Dir(directory) {
-		if s.entries[filepath.Join(directory, name)] {
-			return "./" + name, directory, platform
+		hasUnix := s.entries[filepath.Join(directory, "mvnw")]
+		hasWin := s.entries[filepath.Join(directory, "mvnw.cmd")]
+		switch {
+		case hasUnix && hasWin:
+			if runtime.GOOS == "windows" {
+				return "./mvnw.cmd", directory, ""
+			}
+			return "./mvnw", directory, ""
+		case hasWin:
+			return "./mvnw.cmd", directory, "Windows"
+		case hasUnix:
+			return "./mvnw", directory, "macOS"
 		}
 		if directory == "." {
 			break

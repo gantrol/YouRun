@@ -194,7 +194,7 @@ func (c *Client) start(execution Execution, previous string) (Run, error) {
 	if err := execution.Validate(); err != nil {
 		return Run{}, err
 	}
-	if execution.Platform == "Windows" && runtime.GOOS != "windows" || execution.Platform == "macOS" && runtime.GOOS != "darwin" {
+	if execution.Platform == "Windows" && runtime.GOOS != "windows" || execution.Platform == "macOS" && runtime.GOOS == "windows" {
 		return Run{}, errors.New("platformMismatch")
 	}
 	lock, err := fileLock(filepath.Join(c.dir, "executions.lock"))
@@ -238,7 +238,7 @@ func (c *Client) start(execution Execution, previous string) (Run, error) {
 	if err != nil || !info.IsDir() {
 		return Run{}, errors.New("invalidDirectory")
 	}
-	_, expanded, err := shellCommand(Command{Text: execution.Text, Shell: execution.Shell, Fields: execution.Fields}, Launch{Directory: execution.Directory, Values: execution.Values})
+	_, expanded, err := shellCommand(Command{Text: execution.Text, Shell: execution.Shell, Platform: execution.Platform, Fields: execution.Fields}, Launch{Directory: execution.Directory, Values: execution.Values})
 	if err != nil {
 		return Run{}, err
 	}

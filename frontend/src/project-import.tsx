@@ -188,7 +188,7 @@ export function ProjectImport({
   };
   const available = result?.candidates.filter((c) => !alreadySaved(c, commands)) ?? [];
   const chosen = available.filter((c) => draft?.selected.has(c.id));
-  const eligible = available.filter((c) => (c.platform !== "Windows" || platform === "windows") && (c.platform !== "macOS" || platform === "darwin"));
+  const eligible = available.filter((c) => (c.platform !== "Windows" || platform === "windows") && (c.platform !== "macOS" || platform !== "windows"));
   const hasCandidateQuery = searchTerms(candidateQuery).length > 0;
   const visibleCandidates = useMemo(() => {
     if (!result?.candidates) return [];

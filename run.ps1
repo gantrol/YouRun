@@ -7,14 +7,16 @@ param(
     [switch]$RebuildFrontend,
     [switch]$Check,
     [switch]$NoPause,
-    [switch]$Help
+    [switch]$Help,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Arguments = @()
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 if ($Help) {
-    Write-Output 'Usage: .\run.ps1 [-Framework mygo|wails|mygo-native] [-RebuildFrontend] [-Check] [-NoPause]'
+    Write-Output 'Usage: .\run.ps1 [-Framework mygo|wails|mygo-native] [-RebuildFrontend] [-Check] [-NoPause] [cli args...]'
     Write-Output 'Default: mygo. Uses go run; reuses unchanged frontend output.'
     Write-Output '-Check prepares dependencies and compiles without opening the app. -NoPause skips the error prompt.'
     exit 0
@@ -123,7 +125,7 @@ try {
     }
     else {
         Write-Host ('Starting ' + $Framework + '...')
-        & $goCommand run .
+        & $goCommand run . @Arguments
     }
     if ($LASTEXITCODE -ne 0) {
         $exitCode = $LASTEXITCODE

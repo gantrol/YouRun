@@ -3,27 +3,42 @@ set -euo pipefail
 
 usage() {
   printf '%s\n' \
-    'Usage: bash run.sh [mygo|wails|mygo-native] [--rebuild-frontend]' \
+    'Usage: bash run.sh [mygo|wails|mygo-native] [--rebuild-frontend] [--] [cli args...]' \
     'Default: mygo. Uses go run; reuses unchanged frontend output.'
 }
 
 framework=mygo
 framework_set=false
 rebuild_frontend=false
-for arg in "$@"; do
-  case "$arg" in
+cli_args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     mygo|wails|mygo-native)
       if "$framework_set"; then
-        printf 'Choose one framework.\n' >&2
-        exit 2
+        cli_args+=("$1")
+      else
+        framework=$1
+        framework_set=true
       fi
-      framework=$arg
-      framework_set=true
       ;;
     --rebuild-frontend) rebuild_frontend=true ;;
-    -h|--help) usage; exit 0 ;;
-    *) printf 'Unknown argument: %s\n' "$arg" >&2; usage >&2; exit 2 ;;
+    -h|--help)
+      if [[ ${#cli_args[@]} -eq 0 ]]; then
+        usage
+        exit 0
+      fi
+      cli_args+=("$1")
+      ;;
+    --)
+      shift
+      cli_args+=("$@")
+      break
+      ;;
+    *)
+      cli_args+=("$1")
+      ;;
   esac
+  shift
 done
 
 project_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -71,4 +86,7 @@ fi
 # A normal development launch must not impersonate an update candidate.
 unset COMMAND_MANAGER_UPDATE_PARENT COMMAND_MANAGER_UPDATE_TOKEN COMMAND_MANAGER_UPDATE_REDIRECT
 cd -- "$project_dir/$framework"
+if [[ ${#cli_args[@]} -gt 0 ]]; then
+  exec go run . "${cli_args[@]}"
+fi
 exec go run .

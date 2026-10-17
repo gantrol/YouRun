@@ -47,7 +47,7 @@ func (a *app) commandDetails(c *ui.Context, id string) {
 		a.actions(c, *cmd, cmd.Icon)
 	}
 	// Parameterized commands use the entered values when explicitly started here.
-	if a.running(id) == nil && a.primaryButton(c, a.m("start")).Clicked() {
+	if a.running(id) == nil && a.primaryButton(c, a.m("start")).Disabled(commandUnavailable(*cmd)).Clicked() {
 		a.launch(*cmd, true)
 	}
 	a.commandFeedback(c.Key("launch-issue"), *cmd)
