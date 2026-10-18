@@ -1,0 +1,9 @@
+interface:
+  display_name: "YouRun"
+  short_description: "Manage project commands, detached runs, logs, code drift, and OS ports/processes/files"
+  default_prompt: "Use $yourun (`yourun context` or `yourun_context`) to inspect the current project's saved commands, active runs, code drift, logs, and local ports."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "yourun"
+      description: "YouRun embedded stdio MCP server (`YouRun.exe mcp`)"
