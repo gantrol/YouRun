@@ -48,6 +48,7 @@ func (a *app) settings(c *ui.Context) {
 		a.save(d, nil)
 	}
 	a.startupSetting(c)
+	a.agentIntegrationSetting(c)
 	ui.Text(c, a.m("projects")).Bold()
 	for _, p := range a.state.Definitions.Projects {
 		visible := !p.Hidden

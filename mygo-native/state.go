@@ -53,46 +53,49 @@ type app struct {
 	workspaceViewModel
 	runOutputViewModel
 	session
-	catalogs                                                    map[string]map[string]string
-	loaded, busy, ready, candidate, leaving, closeAfterDiscard  bool
-	bootstrapping                                               bool
-	issue                                                       string
-	commandIssues                                               map[string]string
-	workspaceCancel, logCancel, appearanceCancel, updatesCancel context.CancelFunc
-	logRun                                                      string
-	appearanceRevision, appearanceRequested                     int64
-	rebuilding                                                  atomic.Bool
-	approved, prompting                                         atomic.Bool
-	pendingPage                                                 *page
-	updates                                                     updateState
-	updateDraft                                                 updateConfig
-	updateEditing                                               bool
-	updateLoaded                                                bool
-	scan                                                        discovery.Result
-	importScanned                                               bool
-	checked                                                     map[string]bool
-	importProject                                               string
-	searchFocus                                                 bool
-	searchTerm                                                  string
-	searchExpanded                                              map[string]bool
-	theme                                                       *ui.Theme
-	catalog                                                     *componentCatalogState
-	skin                                                        string
-	projectDetails                                              map[string]desktop.ProjectDetails
-	projectOpeners                                              []desktop.ProjectOpener
-	loadingOpeners                                              bool
-	openersError, editorExecutable                              string
-	projectLogos                                                map[string]ui.ImageSource
-	projectLogoOptions                                          map[string][]ui.ImageSource
-	lastLogoScan                                                time.Time
-	importMetadataProject, importMetadataDirectory              string
-	loadingLogos, reloadLogos                                   bool
-	refreshLogoID                                               string
-	quitOpen, quitBusy, quitFocus, quitError                    bool
-	quitPrompt                                                  desktop.ClosePrompt
-	startup                                                     desktop.StartupSettings
-	startupLoaded, loadingStartup, savingStartup                bool
-	startupError                                                string
+	catalogs                                                                map[string]map[string]string
+	loaded, busy, ready, candidate, leaving, closeAfterDiscard              bool
+	bootstrapping                                                           bool
+	issue                                                                   string
+	commandIssues                                                           map[string]string
+	workspaceCancel, logCancel, appearanceCancel, updatesCancel             context.CancelFunc
+	logRun                                                                  string
+	appearanceRevision, appearanceRequested                                 int64
+	rebuilding                                                              atomic.Bool
+	approved, prompting                                                     atomic.Bool
+	pendingPage                                                             *page
+	updates                                                                 updateState
+	updateDraft                                                             updateConfig
+	updateEditing                                                           bool
+	updateLoaded                                                            bool
+	scan                                                                    discovery.Result
+	importScanned                                                           bool
+	checked                                                                 map[string]bool
+	importProject                                                           string
+	searchFocus                                                             bool
+	searchTerm                                                              string
+	searchExpanded                                                          map[string]bool
+	theme                                                                   *ui.Theme
+	catalog                                                                 *componentCatalogState
+	skin                                                                    string
+	projectDetails                                                          map[string]desktop.ProjectDetails
+	projectOpeners                                                          []desktop.ProjectOpener
+	loadingOpeners                                                          bool
+	openersError, editorExecutable                                          string
+	projectLogos                                                            map[string]ui.ImageSource
+	projectLogoOptions                                                      map[string][]ui.ImageSource
+	lastLogoScan                                                            time.Time
+	importMetadataProject, importMetadataDirectory                          string
+	loadingLogos, reloadLogos                                               bool
+	refreshLogoID                                                           string
+	quitOpen, quitBusy, quitFocus, quitError                                bool
+	quitPrompt                                                              desktop.ClosePrompt
+	startup                                                                 desktop.StartupSettings
+	startupLoaded, loadingStartup, savingStartup                            bool
+	startupError                                                            string
+	agentIntegration                                                        desktop.AgentIntegrationSettings
+	agentIntegrationLoaded, loadingAgentIntegration, savingAgentIntegration bool
+	agentIntegrationError                                                   string
 }
 
 func newApp(host *desktop.Host) *app {
@@ -146,6 +149,7 @@ func (a *app) changedPage() {
 	p := a.current()
 	if p.Kind == "settings" {
 		a.loadStartup()
+		a.loadAgentIntegration()
 	}
 	id := ""
 	if p.Kind == "run" {

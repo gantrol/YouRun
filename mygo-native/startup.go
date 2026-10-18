@@ -62,3 +62,61 @@ func (a *app) startupSetting(c *ui.Context) {
 		ui.Text(c, a.m(a.startup.Reason)).FontSize(12).TextColor(a.theme.TextMuted)
 	}
 }
+
+func (a *app) loadAgentIntegration() {
+	if a.loadingAgentIntegration || a.savingAgentIntegration {
+		return
+	}
+	a.loadingAgentIntegration = true
+	go func() {
+		var next desktop.AgentIntegrationSettings
+		err := a.api.request("GET", "agent-integration", nil, &next)
+		a.dispatchSubscription(a.ctx, func() {
+			a.loadingAgentIntegration = false
+			a.agentIntegrationLoaded = err == nil
+			if err != nil {
+				a.agentIntegrationError = "agentIntegrationLoadFailed"
+				return
+			}
+			a.agentIntegration, a.agentIntegrationError = next, ""
+		})
+	}()
+}
+
+func (a *app) agentIntegrationSetting(c *ui.Context) {
+	enabled := a.agentIntegration.Enabled
+	if a.checkbox(c.Key("agent-integration"), &enabled, a.m("agentIntegration")).
+		Disabled(a.busy || a.candidate || a.host.UpdatePending() || a.loadingAgentIntegration || a.savingAgentIntegration || !a.agentIntegrationLoaded || !a.agentIntegration.Supported).Changed() {
+		a.savingAgentIntegration, a.agentIntegrationError = true, ""
+		a.work(func() (func(), error) {
+			var next desktop.AgentIntegrationSettings
+			err := a.api.request("PUT", "agent-integration", map[string]bool{"enabled": enabled}, &next)
+			loaded := err == nil
+			if err != nil {
+				loaded = a.api.request("GET", "agent-integration", nil, &next) == nil
+			}
+			return func() {
+				a.savingAgentIntegration, a.agentIntegrationLoaded = false, loaded
+				if loaded {
+					a.agentIntegration = next
+				}
+				if err != nil {
+					a.agentIntegrationError = err.Error()
+				}
+			}, nil
+		})
+	}
+	if a.loadingAgentIntegration {
+		ui.Text(c, a.m("loading")).FontSize(12).TextColor(a.theme.TextMuted)
+	} else if a.savingAgentIntegration {
+		ui.Text(c, a.m("saving")).FontSize(12).TextColor(a.theme.TextMuted)
+	}
+	if a.agentIntegrationError != "" {
+		ui.Text(c, a.m(a.agentIntegrationError)).FontSize(12).TextColor(a.theme.Danger)
+		if a.button(c.Key("agent-integration-retry"), a.m("retry")).Disabled(a.loadingAgentIntegration || a.savingAgentIntegration).Clicked() {
+			a.loadAgentIntegration()
+		}
+	} else if a.agentIntegration.Reason != "" {
+		ui.Text(c, a.m(a.agentIntegration.Reason)).FontSize(12).TextColor(a.theme.TextMuted)
+	}
+}
