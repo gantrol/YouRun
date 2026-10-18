@@ -285,6 +285,15 @@ func (c *Client) start(execution Execution, previous string) (Run, error) {
 		cmd.Stdout, cmd.Stderr = launchLog, launchLog
 		prepareDetached(cmd)
 		err = cmd.Start()
+		if err != nil && prepareDetachedFallback(cmd, err) {
+			retryCmd := exec.Command(binary, "_execute", "--data", c.dir, "--id", execution.ID)
+			retryCmd.Dir = filepath.Dir(binary)
+			retryCmd.Env = os.Environ()
+			retryCmd.Stdout, retryCmd.Stderr = launchLog, launchLog
+			retryCmd.SysProcAttr = cmd.SysProcAttr
+			cmd = retryCmd
+			err = cmd.Start()
+		}
 		if err == nil {
 			go func() { _ = cmd.Wait() }()
 		}

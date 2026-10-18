@@ -47,13 +47,56 @@ func openSnapshot(path string) (*os.File, error) {
 	return os.NewFile(uintptr(handle), path), nil
 }
 func prepareDetached(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_BREAKAWAY_FROM_JOB}
+	flags := uint32(windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP)
+	if _, mode := CanLaunchDetached(); mode != "nestedJobFallback" {
+		flags |= windows.CREATE_BREAKAWAY_FROM_JOB
+	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: flags}
 }
+
+func prepareDetachedFallback(cmd *exec.Cmd, startErr error) bool {
+	if cmd.SysProcAttr == nil || cmd.SysProcAttr.CreationFlags&windows.CREATE_BREAKAWAY_FROM_JOB == 0 {
+		return false
+	}
+	if !errors.Is(startErr, windows.ERROR_ACCESS_DENIED) {
+		return false
+	}
+	cmd.SysProcAttr.CreationFlags &^= windows.CREATE_BREAKAWAY_FROM_JOB
+	return true
+}
+
 func prepareChild(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_SUSPENDED | windows.CREATE_NEW_PROCESS_GROUP}
 }
 func prepareHidden(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
+}
+
+// CanLaunchDetached reports whether the current process can spawn a worker and
+// whether it uses full job breakaway or Windows nested job fallback.
+func CanLaunchDetached() (bool, string) {
+	var inJob int32
+	isInJob := windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcessInJob")
+	r1, _, _ := isInJob.Call(uintptr(windows.CurrentProcess()), 0, uintptr(unsafe.Pointer(&inJob)))
+	if r1 == 0 || inJob == 0 {
+		return true, "notInJob"
+	}
+	var info windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+	err := windows.QueryInformationJobObject(
+		0,
+		windows.JobObjectExtendedLimitInformation,
+		uintptr(unsafe.Pointer(&info)),
+		uint32(unsafe.Sizeof(info)),
+		nil,
+	)
+	if err != nil {
+		return true, "inJobUnknownLimits"
+	}
+	const breakawayFlags = windows.JOB_OBJECT_LIMIT_BREAKAWAY_OK | windows.JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK
+	if info.BasicLimitInformation.LimitFlags&breakawayFlags == 0 {
+		return true, "nestedJobFallback"
+	}
+	return true, "breakawayPermitted"
 }
 
 type processGroup struct{ job windows.Handle }

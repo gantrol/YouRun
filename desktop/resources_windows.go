@@ -39,6 +39,7 @@ type exeMetadata struct {
 }
 
 var (
+	modKernel32 = windows.NewLazySystemDLL("kernel32.dll")
 	modPsapi    = windows.NewLazySystemDLL("psapi.dll")
 	modNtdll    = windows.NewLazySystemDLL("ntdll.dll")
 	modIphlpapi = windows.NewLazySystemDLL("iphlpapi.dll")
@@ -47,7 +48,9 @@ var (
 	modShell32  = windows.NewLazySystemDLL("shell32.dll")
 	modUser32   = windows.NewLazySystemDLL("user32.dll")
 	modGdi32    = windows.NewLazySystemDLL("gdi32.dll")
+	modPdh      = windows.NewLazySystemDLL("pdh.dll")
 
+	procGetProcessIoCounters      = modKernel32.NewProc("GetProcessIoCounters")
 	procGetProcessMemoryInfo      = modPsapi.NewProc("GetProcessMemoryInfo")
 	procNtQueryInformationProcess = modNtdll.NewProc("NtQueryInformationProcess")
 	procGetExtendedTcpTable       = modIphlpapi.NewProc("GetExtendedTcpTable")
@@ -67,6 +70,10 @@ var (
 	procCreateDIBSection          = modGdi32.NewProc("CreateDIBSection")
 	procSelectObject              = modGdi32.NewProc("SelectObject")
 	procDeleteObject              = modGdi32.NewProc("DeleteObject")
+	procPdhOpenQueryW             = modPdh.NewProc("PdhOpenQueryW")
+	procPdhAddEnglishCounterW     = modPdh.NewProc("PdhAddEnglishCounterW")
+	procPdhCollectQueryData       = modPdh.NewProc("PdhCollectQueryData")
+	procPdhGetRawCounterArrayW    = modPdh.NewProc("PdhGetRawCounterArrayW")
 
 	sidCacheMu   sync.Mutex
 	sidCache     = map[string]string{}
@@ -294,7 +301,7 @@ func extractExecutableIconDataURL(exePath string) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 }
 
-func resolveExecutableMetadata(exePath string) (string, string) {
+func resolveExecutableMetadata(exePath string, includeIcon bool) (string, string) {
 	if exePath == "" || strings.Contains(strings.ToLower(exePath), "trash") {
 		return "", ""
 	}
@@ -302,18 +309,28 @@ func resolveExecutableMetadata(exePath string) (string, string) {
 	exeMetaMu.Lock()
 	if cached, ok := exeMetaCache[key]; ok {
 		exeMetaMu.Unlock()
-		return cached.displayName, cached.icon
+		if !includeIcon {
+			return cached.displayName, ""
+		}
+		if cached.icon != "" {
+			return cached.displayName, cached.icon
+		}
+	} else {
+		exeMetaMu.Unlock()
 	}
-	exeMetaMu.Unlock()
 
-	meta := exeMetadata{
-		displayName: queryExecutableDisplayName(exePath),
-		icon:        extractExecutableIconDataURL(exePath),
+	displayName := queryExecutableDisplayName(exePath)
+	icon := ""
+	if includeIcon {
+		icon = extractExecutableIconDataURL(exePath)
+		exeMetaMu.Lock()
+		exeMetaCache[key] = exeMetadata{
+			displayName: displayName,
+			icon:        icon,
+		}
+		exeMetaMu.Unlock()
 	}
-	exeMetaMu.Lock()
-	exeMetaCache[key] = meta
-	exeMetaMu.Unlock()
-	return meta.displayName, meta.icon
+	return displayName, icon
 }
 
 type processMemoryCounters struct {
@@ -401,7 +418,302 @@ func queryProcessUser(handle windows.Handle) string {
 	return account
 }
 
-func collectOSProcesses(_ context.Context) (map[int]rawProcess, error) {
+type processIoCounters struct {
+	ReadOperationCount  uint64
+	WriteOperationCount uint64
+	OtherOperationCount uint64
+	ReadTransferCount   uint64
+	WriteTransferCount  uint64
+	OtherTransferCount  uint64
+}
+
+type pdhRawCounter struct {
+	CStatus       uint32
+	TimeStampLow  uint32
+	TimeStampHigh uint32
+	_             uint32
+	FirstValue    int64
+	SecondValue   int64
+	MultiCount    uint32
+	_             uint32
+}
+
+type pdhRawCounterItemW struct {
+	SzName   *uint16
+	RawValue pdhRawCounter
+}
+
+type parsedPdhRawItem struct {
+	name   string
+	status uint32
+	first  int64
+	second int64
+}
+
+type gpuEngineSample struct {
+	first  int64
+	second int64
+}
+
+type pidGPUMetrics struct {
+	gpuPct      float64
+	gpuMemBytes uint64
+}
+
+var (
+	gpuPdhMu            sync.Mutex
+	gpuPdhInitialized   bool
+	gpuPdhSupported     bool
+	gpuPdhQuery         uintptr
+	gpuPdhEngineCtr     uintptr
+	gpuPdhMemCtr        uintptr
+	gpuPrevEngines      = map[string]gpuEngineSample{}
+	gpuLastSampledAt    time.Time
+	gpuLastMetricsByPID = map[int]pidGPUMetrics{}
+)
+
+func parsePIDFromPDHInstance(name string) int {
+	idx := strings.Index(name, "pid_")
+	if idx < 0 {
+		return 0
+	}
+	rest := name[idx+4:]
+	end := strings.IndexByte(rest, '_')
+	if end <= 0 {
+		return 0
+	}
+	pid, err := strconv.Atoi(rest[:end])
+	if err != nil || pid <= 0 {
+		return 0
+	}
+	return pid
+}
+
+func readPdhRawCounterArray(counter uintptr) []parsedPdhRawItem {
+	if counter == 0 {
+		return nil
+	}
+	var bufSize uint32
+	var itemCount uint32
+	r1, _, _ := procPdhGetRawCounterArrayW.Call(
+		counter,
+		uintptr(unsafe.Pointer(&bufSize)),
+		uintptr(unsafe.Pointer(&itemCount)),
+		0,
+	)
+	const pdhMoreData = 0x800007D2
+	if uint32(r1) != pdhMoreData || bufSize == 0 || itemCount == 0 {
+		return nil
+	}
+	for attempt := 0; attempt < 3; attempt++ {
+		buf := make([]byte, bufSize)
+		r1, _, _ = procPdhGetRawCounterArrayW.Call(
+			counter,
+			uintptr(unsafe.Pointer(&bufSize)),
+			uintptr(unsafe.Pointer(&itemCount)),
+			uintptr(unsafe.Pointer(&buf[0])),
+		)
+		if r1 == 0 && itemCount > 0 {
+			rawItems := unsafe.Slice((*pdhRawCounterItemW)(unsafe.Pointer(&buf[0])), int(itemCount))
+			out := make([]parsedPdhRawItem, 0, len(rawItems))
+			for _, it := range rawItems {
+				if it.SzName == nil {
+					continue
+				}
+				out = append(out, parsedPdhRawItem{
+					name:   windows.UTF16PtrToString(it.SzName),
+					status: it.RawValue.CStatus,
+					first:  it.RawValue.FirstValue,
+					second: it.RawValue.SecondValue,
+				})
+			}
+			return out
+		}
+		if uint32(r1) != pdhMoreData || bufSize == 0 {
+			break
+		}
+	}
+	return nil
+}
+
+func collectOSGPUMetrics() (map[int]pidGPUMetrics, bool, bool) {
+	gpuPdhMu.Lock()
+	defer gpuPdhMu.Unlock()
+
+	if !gpuPdhInitialized {
+		gpuPdhInitialized = true
+		r1, _, _ := procPdhOpenQueryW.Call(0, 0, uintptr(unsafe.Pointer(&gpuPdhQuery)))
+		if r1 == 0 && gpuPdhQuery != 0 {
+			if engPath, err := windows.UTF16PtrFromString(`\GPU Engine(*)\Utilization Percentage`); err == nil {
+				_, _, _ = procPdhAddEnglishCounterW.Call(
+					gpuPdhQuery,
+					uintptr(unsafe.Pointer(engPath)),
+					0,
+					uintptr(unsafe.Pointer(&gpuPdhEngineCtr)),
+				)
+			}
+			if memPath, err := windows.UTF16PtrFromString(`\GPU Process Memory(*)\Local Usage`); err == nil {
+				_, _, _ = procPdhAddEnglishCounterW.Call(
+					gpuPdhQuery,
+					uintptr(unsafe.Pointer(memPath)),
+					0,
+					uintptr(unsafe.Pointer(&gpuPdhMemCtr)),
+				)
+			}
+			if gpuPdhEngineCtr != 0 || gpuPdhMemCtr != 0 {
+				gpuPdhSupported = true
+			}
+		}
+	}
+
+	if !gpuPdhSupported {
+		return nil, false, false
+	}
+
+	now := time.Now()
+	if !gpuLastSampledAt.IsZero() && now.Sub(gpuLastSampledAt) < 100*time.Millisecond && len(gpuLastMetricsByPID) > 0 {
+		copied := make(map[int]pidGPUMetrics, len(gpuLastMetricsByPID))
+		for k, v := range gpuLastMetricsByPID {
+			copied[k] = v
+		}
+		return copied, false, true
+	}
+
+	r1, _, _ := procPdhCollectQueryData.Call(gpuPdhQuery)
+	if r1 != 0 {
+		return nil, false, false
+	}
+
+	memByPID := map[int]uint64{}
+	for _, it := range readPdhRawCounterArray(gpuPdhMemCtr) {
+		if (it.status == 0 || it.status == 1) && it.first > 0 {
+			if pid := parsePIDFromPDHInstance(it.name); pid > 0 {
+				memByPID[pid] += uint64(it.first)
+			}
+		}
+	}
+
+	hasPrev := !gpuLastSampledAt.IsZero()
+	pctByPID := map[int]float64{}
+	engItems := readPdhRawCounterArray(gpuPdhEngineCtr)
+	nextEngines := make(map[string]gpuEngineSample, len(engItems))
+	for _, it := range engItems {
+		if it.status != 0 && it.status != 1 {
+			continue
+		}
+		pid := parsePIDFromPDHInstance(it.name)
+		if pid <= 0 {
+			continue
+		}
+		cur := gpuEngineSample{first: it.first, second: it.second}
+		nextEngines[it.name] = cur
+		if hasPrev {
+			if prev, ok := gpuPrevEngines[it.name]; ok {
+				d1 := cur.first - prev.first
+				d2 := cur.second - prev.second
+				if d1 > 0 && d2 > 0 {
+					pct := (float64(d1) / float64(d2)) * 100.0
+					if pct > 0 {
+						pctByPID[pid] += pct
+					}
+				}
+			}
+		}
+	}
+
+	gpuPrevEngines = nextEngines
+	gpuLastSampledAt = now
+
+	out := map[int]pidGPUMetrics{}
+	for pid, mem := range memByPID {
+		out[pid] = pidGPUMetrics{gpuMemBytes: mem}
+	}
+	for pid, pct := range pctByPID {
+		if pct > 100 {
+			pct = 100
+		}
+		cur := out[pid]
+		cur.gpuPct = pct
+		out[pid] = cur
+	}
+	if hasPrev {
+		gpuLastMetricsByPID = out
+	}
+	return out, !hasPrev, true
+}
+
+func primeProcessMetricsBaseline(ctx context.Context) {
+	cpuSamplesMu.Lock()
+	needPrime := len(cpuSamples) == 0
+	cpuSamplesMu.Unlock()
+	if !needPrime {
+		return
+	}
+
+	_, _, _ = collectOSGPUMetrics()
+
+	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return
+	}
+	now := time.Now()
+	entry := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
+	cpuSamplesMu.Lock()
+	for err = windows.Process32First(snapshot, &entry); err == nil; err = windows.Process32Next(snapshot, &entry) {
+		pid := int(entry.ProcessID)
+		if pid == 0 {
+			continue
+		}
+		h, openErr := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, entry.ProcessID)
+		if openErr != nil {
+			continue
+		}
+		var created, exited, kernel, user windows.Filetime
+		if tErr := windows.GetProcessTimes(h, &created, &exited, &kernel, &user); tErr == nil {
+			startedNs := created.Nanoseconds()
+			total100ns := (uint64(kernel.HighDateTime)<<32 | uint64(kernel.LowDateTime)) +
+				(uint64(user.HighDateTime)<<32 | uint64(user.LowDateTime))
+			var ioCnt processIoCounters
+			var ioBytes uint64
+			if r1, _, _ := procGetProcessIoCounters.Call(uintptr(h), uintptr(unsafe.Pointer(&ioCnt))); r1 != 0 {
+				ioBytes = ioCnt.ReadTransferCount + ioCnt.WriteTransferCount + ioCnt.OtherTransferCount
+			}
+			key := cpuSampleKey{pid: pid, startedNs: startedNs}
+			cpuSamples[key] = cpuSampleVal{
+				total100ns: total100ns,
+				ioBytes:    ioBytes,
+				sampledAt:  now,
+			}
+		}
+		windows.CloseHandle(h)
+	}
+	cpuSamplesMu.Unlock()
+	windows.CloseHandle(snapshot)
+
+	timer := time.NewTimer(140 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
+}
+
+func collectOSProcesses(ctx context.Context) (map[int]rawProcess, error) {
+	includeIcon := !shouldSkipProcessIcons(ctx)
+	collectMetrics := shouldCollectProcessMetrics(ctx)
+	if collectMetrics {
+		primeProcessMetricsBaseline(ctx)
+	}
+
+	var (
+		gpuMetrics   map[int]pidGPUMetrics
+		gpuSampling  bool
+		gpuSupported bool
+	)
+	if collectMetrics {
+		gpuMetrics, gpuSampling, gpuSupported = collectOSGPUMetrics()
+	}
+
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return nil, err
@@ -430,6 +742,17 @@ func collectOSProcesses(_ context.Context) (map[int]rawProcess, error) {
 			Name:             name,
 			CommandLineState: "unavailable",
 		}
+		if gpuSupported {
+			gm := gpuMetrics[pid]
+			rp.GPUMemoryBytes = gm.gpuMemBytes
+			if gpuSampling {
+				rp.GPUSampling = true
+			} else {
+				gpuPct := gm.gpuPct
+				rp.GPUPercent = &gpuPct
+			}
+		}
+
 		h, openErr := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, entry.ProcessID)
 		if openErr != nil {
 			if errors.Is(openErr, windows.ERROR_ACCESS_DENIED) {
@@ -445,7 +768,7 @@ func collectOSProcesses(_ context.Context) (map[int]rawProcess, error) {
 		exeLen := uint32(len(exeBuf))
 		if qErr := windows.QueryFullProcessImageName(h, 0, &exeBuf[0], &exeLen); qErr == nil && exeLen > 0 {
 			rp.Executable = windows.UTF16ToString(exeBuf[:exeLen])
-			rp.DisplayName, rp.Icon = resolveExecutableMetadata(rp.Executable)
+			rp.DisplayName, rp.Icon = resolveExecutableMetadata(rp.Executable, includeIcon)
 		}
 
 		// Memory working set
@@ -455,7 +778,14 @@ func collectOSProcesses(_ context.Context) (map[int]rawProcess, error) {
 			rp.WorkingSet(&mem)
 		}
 
-		// Process times & CPU %
+		// IO transfer bytes
+		var ioCnt processIoCounters
+		var ioBytes uint64
+		if r1, _, _ := procGetProcessIoCounters.Call(uintptr(h), uintptr(unsafe.Pointer(&ioCnt))); r1 != 0 {
+			ioBytes = ioCnt.ReadTransferCount + ioCnt.WriteTransferCount + ioCnt.OtherTransferCount
+		}
+
+		// Process times, CPU %, and Network IO rate
 		var created, exited, kernel, user windows.Filetime
 		if tErr := windows.GetProcessTimes(h, &created, &exited, &kernel, &user); tErr == nil {
 			startedNs := created.Nanoseconds()
@@ -468,11 +798,17 @@ func collectOSProcesses(_ context.Context) (map[int]rawProcess, error) {
 			cpuSamplesMu.Lock()
 			prev, hasPrev := cpuSamples[key]
 			if !hasPrev {
-				cpuSamples[key] = cpuSampleVal{total100ns: total100ns, sampledAt: now}
+				cpuSamples[key] = cpuSampleVal{
+					total100ns: total100ns,
+					ioBytes:    ioBytes,
+					sampledAt:  now,
+				}
 				rp.CPUSampling = true
+				rp.NetworkSampling = true
 			} else {
 				elapsed := now.Sub(prev.sampledAt)
 				if elapsed >= 120*time.Millisecond {
+					elapsedSec := elapsed.Seconds()
 					elapsed100ns := float64(elapsed.Nanoseconds()) / 100.0
 					var delta uint64
 					if total100ns >= prev.total100ns {
@@ -485,11 +821,32 @@ func collectOSProcesses(_ context.Context) (map[int]rawProcess, error) {
 					if pct > 100 {
 						pct = 100
 					}
+					var ioDelta uint64
+					if ioBytes >= prev.ioBytes {
+						ioDelta = ioBytes - prev.ioBytes
+					}
+					netRate := 0.0
+					if elapsedSec > 0 {
+						netRate = float64(ioDelta) / elapsedSec
+					}
 					rp.CPUPercent = &pct
-					cpuSamples[key] = cpuSampleVal{total100ns: total100ns, sampledAt: now}
+					rp.NetworkBytesPerSec = &netRate
+					cpuSamples[key] = cpuSampleVal{
+						total100ns:   total100ns,
+						ioBytes:      ioBytes,
+						lastCPUPct:   pct,
+						lastNetRate:  netRate,
+						hasLastRates: true,
+						sampledAt:    now,
+					}
+				} else if prev.hasLastRates {
+					pct := prev.lastCPUPct
+					netRate := prev.lastNetRate
+					rp.CPUPercent = &pct
+					rp.NetworkBytesPerSec = &netRate
 				} else {
-					pct := 0.0
-					rp.CPUPercent = &pct
+					rp.CPUSampling = true
+					rp.NetworkSampling = true
 				}
 			}
 			cpuSamplesMu.Unlock()
@@ -696,13 +1053,13 @@ type rmUniqueProcess struct {
 }
 
 type rmProcessInfo struct {
-	Process          rmUniqueProcess
-	StrAppName       [256]uint16
-	StrServiceShort  [64]uint16
-	ApplicationType  uint32
-	AppStatus        uint32
-	TSSessionId      uint32
-	BRestartable     int32
+	Process         rmUniqueProcess
+	StrAppName      [256]uint16
+	StrServiceShort [64]uint16
+	ApplicationType uint32
+	AppStatus       uint32
+	TSSessionId     uint32
+	BRestartable    int32
 }
 
 func queryRestartManager(files []string) []rawFileHandle {

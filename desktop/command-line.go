@@ -20,8 +20,14 @@ func CommandLine() (handled bool, exitCode int) {
 	if len(args) == 0 {
 		return false, 0
 	}
+	RegisterCLIResourceHandler()
+	return true, cli.Main(args)
+}
+
+// RegisterCLIResourceHandler wires OS process, port, and file handle queries into the CLI and MCP server.
+func RegisterCLIResourceHandler() {
 	cli.ResourceHandler = func(ctx context.Context, mode string, dataDir string, ws *workspace.Service, targetPath string, recursive bool) (any, error) {
-		qCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		qCtx, cancel := context.WithTimeout(WithSkipProcessIcons(ctx, !cli.ShouldIncludeImages(ctx)), 8*time.Second)
 		defer cancel()
 		switch mode {
 		case "processes":
@@ -42,7 +48,6 @@ func CommandLine() (handled bool, exitCode int) {
 			return nil, errors.New("unknownResourceMode")
 		}
 	}
-	return true, cli.Main(args)
 }
 
 func filterPlatformArgs(goos string, args []string) []string {

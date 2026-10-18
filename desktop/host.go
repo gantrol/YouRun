@@ -140,6 +140,10 @@ func New(framework string, frontend fs.FS) (*Host, error) {
 			host.serveStartup(w, r)
 			return
 		}
+		if r.URL.Path == "/api/agent-integration" {
+			host.serveAgentIntegration(w, r)
+			return
+		}
 		if r.URL.Path == "/api/project-details" {
 			host.serveProjectDetails(w, r)
 			return

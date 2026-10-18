@@ -54,16 +54,24 @@ func collectionPath(col engine.Collection, byID map[string]engine.Collection) st
 }
 
 func searchWorkspace(service *workspace.Service, query, projectFilter string, showHidden bool) error {
-	status, data, err := service.Request(context.Background(), "GET", "/api/state", nil)
+	resp, err := buildSearchResponse(service, query, projectFilter, showHidden)
 	if err != nil {
 		return err
 	}
+	return json.NewEncoder(os.Stdout).Encode(resp)
+}
+
+func buildSearchResponse(service *workspace.Service, query, projectFilter string, showHidden bool) (searchResponse, error) {
+	status, data, err := service.Request(context.Background(), "GET", "/api/state", nil)
+	if err != nil {
+		return searchResponse{}, err
+	}
 	if status >= 400 {
-		return errors.New("requestFailed")
+		return searchResponse{}, errors.New("requestFailed")
 	}
 	var state engine.Snapshot
 	if err = json.Unmarshal(data, &state); err != nil {
-		return err
+		return searchResponse{}, err
 	}
 
 	defs := state.Definitions
@@ -219,12 +227,12 @@ func searchWorkspace(service *workspace.Service, query, projectFilter string, sh
 		collections = append(collections, entry.item)
 	}
 
-	return json.NewEncoder(os.Stdout).Encode(searchResponse{
+	return searchResponse{
 		Query:       strings.TrimSpace(query),
 		Projects:    projects,
 		Collections: collections,
 		Commands:    commands,
-	})
+	}, nil
 }
 
 func filterRuns(runs []engine.Run, query string) []engine.Run {

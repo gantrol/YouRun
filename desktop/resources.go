@@ -18,32 +18,38 @@ import (
 )
 
 type ProcessItem struct {
-	PID              int                    `json:"pid"`
-	PPID             int                    `json:"ppid"`
-	Name             string                 `json:"name"`
-	DisplayName      string                 `json:"displayName,omitempty"`
-	Icon             string                 `json:"icon,omitempty"`
-	Executable       string                 `json:"executable,omitempty"`
-	CommandLine      string                 `json:"commandLine,omitempty"`
-	CommandLineState string                 `json:"commandLineState"`
-	User             string                 `json:"user,omitempty"`
-	Status           string                 `json:"status"`
-	StartedAt        string                 `json:"startedAt,omitempty"`
-	CPUPercent       *float64               `json:"cpuPercent"`
-	CPUSampling      bool                   `json:"cpuSampling,omitempty"`
-	MemoryBytes      uint64                 `json:"memoryBytes"`
-	Ports            []int                  `json:"ports,omitempty"`
-	Ownership        string                 `json:"ownership"`
-	RunID            string                 `json:"runId,omitempty"`
-	RunStatus        string                 `json:"runStatus,omitempty"`
-	CommandID        string                 `json:"commandId,omitempty"`
-	CommandTitle     string                 `json:"commandTitle,omitempty"`
-	ProjectID        string                 `json:"projectId,omitempty"`
-	ProjectName      string                 `json:"projectName,omitempty"`
-	WorkspaceID      string                 `json:"workspaceId,omitempty"`
-	WorkspaceName    string                 `json:"workspaceName,omitempty"`
-	Directory        string                 `json:"directory,omitempty"`
-	LaunchSource     *engine.SourceSnapshot `json:"launchSource,omitempty"`
+	PID                int                    `json:"pid"`
+	PPID               int                    `json:"ppid"`
+	Name               string                 `json:"name"`
+	DisplayName        string                 `json:"displayName,omitempty"`
+	Icon               string                 `json:"icon,omitempty"`
+	Executable         string                 `json:"executable,omitempty"`
+	CommandLine        string                 `json:"commandLine,omitempty"`
+	CommandLineState   string                 `json:"commandLineState"`
+	User               string                 `json:"user,omitempty"`
+	Status             string                 `json:"status"`
+	StartedAt          string                 `json:"startedAt,omitempty"`
+	CPUPercent         *float64               `json:"cpuPercent"`
+	CPUSampling        bool                   `json:"cpuSampling,omitempty"`
+	MemoryBytes        uint64                 `json:"memoryBytes"`
+	GPUPercent         *float64               `json:"gpuPercent"`
+	GPUSampling        bool                   `json:"gpuSampling,omitempty"`
+	GPUMemoryBytes     uint64                 `json:"gpuMemoryBytes,omitempty"`
+	NetworkBytesPerSec *float64               `json:"networkBytesPerSec"`
+	NetworkSampling    bool                   `json:"networkSampling,omitempty"`
+	NetworkConnections int                    `json:"networkConnections,omitempty"`
+	Ports              []int                  `json:"ports,omitempty"`
+	Ownership          string                 `json:"ownership"`
+	RunID              string                 `json:"runId,omitempty"`
+	RunStatus          string                 `json:"runStatus,omitempty"`
+	CommandID          string                 `json:"commandId,omitempty"`
+	CommandTitle       string                 `json:"commandTitle,omitempty"`
+	ProjectID          string                 `json:"projectId,omitempty"`
+	ProjectName        string                 `json:"projectName,omitempty"`
+	WorkspaceID        string                 `json:"workspaceId,omitempty"`
+	WorkspaceName      string                 `json:"workspaceName,omitempty"`
+	Directory          string                 `json:"directory,omitempty"`
+	LaunchSource       *engine.SourceSnapshot `json:"launchSource,omitempty"`
 }
 
 type PortItem struct {
@@ -106,20 +112,25 @@ type FileHandleItem struct {
 }
 
 type rawProcess struct {
-	PID              int
-	PPID             int
-	Name             string
-	DisplayName      string
-	Icon             string
-	Executable       string
-	CommandLine      string
-	CommandLineState string
-	User             string
-	StartedAt        time.Time
-	CPUPercent       *float64
-	CPUSampling      bool
-	MemoryBytes      uint64
-	AccessDenied     bool
+	PID                int
+	PPID               int
+	Name               string
+	DisplayName        string
+	Icon               string
+	Executable         string
+	CommandLine        string
+	CommandLineState   string
+	User               string
+	StartedAt          time.Time
+	CPUPercent         *float64
+	CPUSampling        bool
+	MemoryBytes        uint64
+	GPUPercent         *float64
+	GPUSampling        bool
+	GPUMemoryBytes     uint64
+	NetworkBytesPerSec *float64
+	NetworkSampling    bool
+	AccessDenied       bool
 }
 
 type rawPort struct {
@@ -140,14 +151,47 @@ type cpuSampleKey struct {
 }
 
 type cpuSampleVal struct {
-	total100ns uint64
-	sampledAt  time.Time
+	total100ns   uint64
+	ioBytes      uint64
+	lastCPUPct   float64
+	lastNetRate  float64
+	hasLastRates bool
+	sampledAt    time.Time
 }
 
 var (
 	cpuSamplesMu sync.Mutex
 	cpuSamples   = map[cpuSampleKey]cpuSampleVal{}
 )
+
+type skipIconsKey struct{}
+type processMetricsKey struct{}
+
+// WithSkipProcessIcons instructs OS resource queries to skip extracting and
+// returning base64 process icons (used by CLI/MCP unless --include-images is set).
+func WithSkipProcessIcons(ctx context.Context, skip bool) context.Context {
+	return context.WithValue(ctx, skipIconsKey{}, skip)
+}
+
+func shouldSkipProcessIcons(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(skipIconsKey{}).(bool)
+	return v
+}
+
+func withProcessMetrics(ctx context.Context, enabled bool) context.Context {
+	return context.WithValue(ctx, processMetricsKey{}, enabled)
+}
+
+func shouldCollectProcessMetrics(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(processMetricsKey{}).(bool)
+	return v
+}
 
 type runAttribution struct {
 	Ownership     string
@@ -339,17 +383,19 @@ func (h *Host) serveChooseFile(w http.ResponseWriter, r *http.Request) {
 
 func QueryProcesses(ctx context.Context, dataDir string, ws *workspace.Service) (map[string]any, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	procs, err := collectOSProcesses(ctx)
+	procs, err := collectOSProcesses(withProcessMetrics(ctx, true))
 	if err != nil {
 		return nil, err
 	}
 	rawPorts, _ := collectOSPorts(ctx)
 	portsByPID := map[int][]int{}
 	seenPortByPID := map[int]map[int]bool{}
+	connCountByPID := map[int]int{}
 	for _, p := range rawPorts {
 		if p.PID <= 0 || p.Port <= 0 {
 			continue
 		}
+		connCountByPID[p.PID]++
 		if seenPortByPID[p.PID] == nil {
 			seenPortByPID[p.PID] = map[int]bool{}
 		}
@@ -378,33 +424,47 @@ func QueryProcesses(ctx context.Context, dataDir string, ws *workspace.Service) 
 		if !p.StartedAt.IsZero() {
 			startedStr = p.StartedAt.UTC().Format(time.RFC3339Nano)
 		}
+		connCount := connCountByPID[p.PID]
+		netRate := p.NetworkBytesPerSec
+		netSampling := p.NetworkSampling
+		if connCount == 0 {
+			zero := 0.0
+			netRate = &zero
+			netSampling = false
+		}
 		items = append(items, ProcessItem{
-			PID:              p.PID,
-			PPID:             p.PPID,
-			Name:             p.Name,
-			DisplayName:      p.DisplayName,
-			Icon:             p.Icon,
-			Executable:       p.Executable,
-			CommandLine:      p.CommandLine,
-			CommandLineState: p.CommandLineState,
-			User:             p.User,
-			Status:           "running",
-			StartedAt:        startedStr,
-			CPUPercent:       p.CPUPercent,
-			CPUSampling:      p.CPUSampling,
-			MemoryBytes:      p.MemoryBytes,
-			Ports:            portsByPID[p.PID],
-			Ownership:        ownership,
-			RunID:            attr.RunID,
-			RunStatus:        attr.RunStatus,
-			CommandID:        attr.CommandID,
-			CommandTitle:     attr.CommandTitle,
-			ProjectID:        attr.ProjectID,
-			ProjectName:      attr.ProjectName,
-			WorkspaceID:      attr.WorkspaceID,
-			WorkspaceName:    attr.WorkspaceName,
-			Directory:        attr.Directory,
-			LaunchSource:     attr.LaunchSource,
+			PID:                p.PID,
+			PPID:               p.PPID,
+			Name:               p.Name,
+			DisplayName:        p.DisplayName,
+			Icon:               p.Icon,
+			Executable:         p.Executable,
+			CommandLine:        p.CommandLine,
+			CommandLineState:   p.CommandLineState,
+			User:               p.User,
+			Status:             "running",
+			StartedAt:          startedStr,
+			CPUPercent:         p.CPUPercent,
+			CPUSampling:        p.CPUSampling,
+			MemoryBytes:        p.MemoryBytes,
+			GPUPercent:         p.GPUPercent,
+			GPUSampling:        p.GPUSampling,
+			GPUMemoryBytes:     p.GPUMemoryBytes,
+			NetworkBytesPerSec: netRate,
+			NetworkSampling:    netSampling,
+			NetworkConnections: connCount,
+			Ports:              portsByPID[p.PID],
+			Ownership:          ownership,
+			RunID:              attr.RunID,
+			RunStatus:          attr.RunStatus,
+			CommandID:          attr.CommandID,
+			CommandTitle:       attr.CommandTitle,
+			ProjectID:          attr.ProjectID,
+			ProjectName:        attr.ProjectName,
+			WorkspaceID:        attr.WorkspaceID,
+			WorkspaceName:      attr.WorkspaceName,
+			Directory:          attr.Directory,
+			LaunchSource:       attr.LaunchSource,
 		})
 	}
 	sort.Slice(items, func(i, j int) bool {

@@ -300,6 +300,80 @@ func loadState(service *workspace.Service) (engine.Snapshot, error) {
 	return state, nil
 }
 
+func projectCandidatesForIDs(state engine.Snapshot, dataDir string, ids []string) []ProjectCandidate {
+	meta, _ := projectmeta.Load(dataDir)
+	byID := map[string]engine.Project{}
+	for _, p := range state.Definitions.Projects {
+		byID[p.ID] = p
+	}
+	out := make([]ProjectCandidate, 0, len(ids))
+	for _, id := range ids {
+		p, ok := byID[id]
+		if !ok {
+			continue
+		}
+		var fallback []string
+		for _, c := range state.Definitions.Commands {
+			if c.Project != nil && *c.Project == id && c.Directory != "" {
+				fallback = append(fallback, c.Directory)
+			}
+		}
+		locs, activeID := projectmeta.ResolveLocations(meta[id], fallback)
+		dir := ""
+		for _, loc := range locs {
+			if loc.ID == activeID {
+				dir = loc.Directory
+				break
+			}
+		}
+		if dir == "" && len(locs) > 0 {
+			dir = locs[0].Directory
+		}
+		out = append(out, ProjectCandidate{ID: p.ID, Name: p.Name, Directory: dir})
+	}
+	return out
+}
+
+func commandCandidatesFromCommands(cmds []engine.Command, projectByID map[string]engine.Project) []CommandCandidate {
+	out := make([]CommandCandidate, 0, len(cmds))
+	for _, c := range cmds {
+		var pid, pname string
+		if c.Project != nil {
+			pid = *c.Project
+			if p, ok := projectByID[pid]; ok {
+				pname = p.Name
+			}
+		}
+		kind, _, _ := classifyCommand(c)
+		out = append(out, CommandCandidate{
+			ID:          c.ID,
+			Title:       c.Title,
+			Text:        c.Text,
+			ProjectID:   pid,
+			ProjectName: pname,
+			Directory:   c.Directory,
+			Kind:        kind,
+		})
+	}
+	return out
+}
+
+func runCandidatesFromRuns(runs []engine.Run) []RunCandidate {
+	out := make([]RunCandidate, 0, len(runs))
+	for _, r := range runs {
+		out = append(out, RunCandidate{
+			ID:        r.ID,
+			CommandID: r.CommandID,
+			Title:     r.Title,
+			Status:    r.Status,
+			PID:       r.PID,
+			Directory: r.Directory,
+			Time:      r.Time,
+		})
+	}
+	return out
+}
+
 func resolveTargetProjectIDs(state engine.Snapshot, dataDir, projectFlag, dirFlag string) ([]string, string, error) {
 	projects := state.Definitions.Projects
 	if strings.TrimSpace(projectFlag) != "" {
@@ -323,13 +397,19 @@ func resolveTargetProjectIDs(state engine.Snapshot, dataDir, projectFlag, dirFla
 		case len(exactName) == 1:
 			return exactName, "", nil
 		case len(exactName) > 1:
-			return nil, "", errors.New("ambiguousProject")
+			return nil, "", newStructuredError("ambiguousProject", "", "", projectCandidatesForIDs(state, dataDir, exactName))
 		case len(partial) == 1:
 			return partial, "", nil
 		case len(partial) > 1:
-			return nil, "", errors.New("ambiguousProject")
+			return nil, "", newStructuredError("ambiguousProject", "", "", projectCandidatesForIDs(state, dataDir, partial))
 		default:
-			return nil, "", errors.New("projectMissing")
+			var visibleIDs []string
+			for _, p := range projects {
+				if !p.Hidden {
+					visibleIDs = append(visibleIDs, p.ID)
+				}
+			}
+			return nil, "", newStructuredError("projectMissing", "", "", projectCandidatesForIDs(state, dataDir, visibleIDs))
 		}
 	}
 
@@ -343,7 +423,7 @@ func resolveTargetProjectIDs(state engine.Snapshot, dataDir, projectFlag, dirFla
 	}
 	absDir, err := filepath.Abs(targetDir)
 	if err != nil {
-		return nil, "", errors.New("invalidDirectory")
+		return nil, "", newStructuredError("invalidDirectory", "", "", nil)
 	}
 	absDir = filepath.Clean(absDir)
 
@@ -372,6 +452,11 @@ func resolveTargetProjectIDs(state engine.Snapshot, dataDir, projectFlag, dirFla
 	for projectID, entry := range meta {
 		for _, root := range entry.Roots {
 			if dist, ok := pathDistance(root, absDir); ok {
+				recordMatch(projectID, dist)
+			}
+		}
+		for _, loc := range entry.Locations {
+			if dist, ok := pathDistance(loc.Directory, absDir); ok {
 				recordMatch(projectID, dist)
 			}
 		}
@@ -407,17 +492,17 @@ func resolveLaunchCommand(mode string, state engine.Snapshot, dataDir, commandFl
 				continue
 			}
 			if cmd.Hidden || (cmd.Project != nil && projectByID[*cmd.Project].Hidden) {
-				return engine.Command{}, errors.New("commandMissing")
+				return engine.Command{}, newStructuredError("commandMissing", "", "", nil)
 			}
 			if !availableOnCurrentPlatform(cmd.Platform) {
-				return engine.Command{}, errors.New("platformMismatch")
+				return engine.Command{}, newStructuredError("platformMismatch", "", "", nil)
 			}
 			if strings.TrimSpace(cmd.Directory) == "" {
-				return engine.Command{}, errors.New("invalidDirectory")
+				return engine.Command{}, newStructuredError("invalidDirectory", "", "", nil)
 			}
 			return cmd, nil
 		}
-		return engine.Command{}, errors.New("commandMissing")
+		return engine.Command{}, newStructuredError("commandMissing", "", "", nil)
 	}
 
 	projectIDs, absDir, err := resolveTargetProjectIDs(state, dataDir, projectFlag, dirFlag)
@@ -425,7 +510,7 @@ func resolveLaunchCommand(mode string, state engine.Snapshot, dataDir, commandFl
 		return engine.Command{}, err
 	}
 	if len(projectIDs) > 1 {
-		return engine.Command{}, errors.New("ambiguousProject")
+		return engine.Command{}, newStructuredError("ambiguousProject", "", "", projectCandidatesForIDs(state, dataDir, projectIDs))
 	}
 
 	var scope []engine.Command
@@ -451,7 +536,7 @@ func resolveLaunchCommand(mode string, state engine.Snapshot, dataDir, commandFl
 		}
 	}
 	if len(scope) == 0 {
-		return engine.Command{}, errors.New("commandMissing")
+		return engine.Command{}, newStructuredError("commandMissing", "", "", nil)
 	}
 
 	wantKind := "run"
@@ -480,7 +565,7 @@ func resolveLaunchCommand(mode string, state engine.Snapshot, dataDir, commandFl
 				return bound[0], nil
 			}
 			if len(bound) > 1 {
-				return engine.Command{}, errors.New("ambiguousCommand")
+				return engine.Command{}, newStructuredError("ambiguousCommand", "", "", commandCandidatesFromCommands(bound, projectByID))
 			}
 		}
 
@@ -502,7 +587,7 @@ func resolveLaunchCommand(mode string, state engine.Snapshot, dataDir, commandFl
 			return buttonMatches[0], nil
 		}
 		if len(buttonMatches) > 1 {
-			return engine.Command{}, errors.New("ambiguousCommand")
+			return engine.Command{}, newStructuredError("ambiguousCommand", "", "", commandCandidatesFromCommands(buttonMatches, projectByID))
 		}
 	}
 
@@ -510,7 +595,7 @@ func resolveLaunchCommand(mode string, state engine.Snapshot, dataDir, commandFl
 		if len(scope) == 1 {
 			return scope[0], nil
 		}
-		return engine.Command{}, errors.New("ambiguousCommand")
+		return engine.Command{}, newStructuredError("ambiguousCommand", "", "", commandCandidatesFromCommands(scope, projectByID))
 	}
 
 	var ranked []rankedLaunch
@@ -525,13 +610,25 @@ func resolveLaunchCommand(mode string, state engine.Snapshot, dataDir, commandFl
 		ranked = append(ranked, rankedLaunch{command: cmd, kind: kind, score: score})
 	}
 	if len(ranked) == 0 {
-		return engine.Command{}, errors.New("commandMissing")
+		return engine.Command{}, newStructuredError(
+			"commandMissing",
+			"No saved "+mode+" command was found in this scope; inspect available commands in `candidates` and run `yourun start --command <id>`.",
+			"Use `yourun start --command <id>` with one of the candidate commands.",
+			commandCandidatesFromCommands(scope, projectByID),
+		)
 	}
 	sort.SliceStable(ranked, func(i, j int) bool {
 		return ranked[i].score > ranked[j].score
 	})
 	if len(ranked) > 1 && ranked[0].score == ranked[1].score && ranked[0].command.ID != ranked[1].command.ID {
-		return engine.Command{}, errors.New("ambiguousCommand")
+		var tied []engine.Command
+		topScore := ranked[0].score
+		for _, r := range ranked {
+			if r.score == topScore {
+				tied = append(tied, r.command)
+			}
+		}
+		return engine.Command{}, newStructuredError("ambiguousCommand", "", "", commandCandidatesFromCommands(tied, projectByID))
 	}
 	return ranked[0].command, nil
 }
@@ -543,6 +640,7 @@ func resolveTargetRunID(mode string, state engine.Snapshot, dataDir, idFlag, com
 	onlyActive := mode == "stop"
 
 	matchCommandIDs := map[string]bool{}
+	var fallbackDir string
 	if strings.TrimSpace(commandFlag) != "" {
 		matchCommandIDs[strings.TrimSpace(commandFlag)] = true
 	} else {
@@ -551,7 +649,7 @@ func resolveTargetRunID(mode string, state engine.Snapshot, dataDir, idFlag, com
 			return "", err
 		}
 		if len(projectIDs) > 1 {
-			return "", errors.New("ambiguousProject")
+			return "", newStructuredError("ambiguousProject", "", "", projectCandidatesForIDs(state, dataDir, projectIDs))
 		}
 		if len(projectIDs) == 1 {
 			for _, cmd := range state.Definitions.Commands {
@@ -560,6 +658,7 @@ func resolveTargetRunID(mode string, state engine.Snapshot, dataDir, idFlag, com
 				}
 			}
 		} else if absDir != "" {
+			fallbackDir = absDir
 			for _, run := range state.Runs {
 				if normalizePath(run.Directory) == normalizePath(absDir) {
 					matchCommandIDs[run.CommandID] = true
@@ -568,33 +667,42 @@ func resolveTargetRunID(mode string, state engine.Snapshot, dataDir, idFlag, com
 		}
 	}
 
-	var activeMatches []string
-	var replayableMatches []string
+	var activeMatches []engine.Run
+	var replayableMatches []engine.Run
 	for _, run := range state.Runs {
-		if !matchCommandIDs[run.CommandID] {
+		matched := matchCommandIDs[run.CommandID]
+		if !matched && fallbackDir != "" && normalizePath(run.Directory) == normalizePath(fallbackDir) {
+			matched = true
+		}
+		if !matched {
 			continue
 		}
 		if run.Status == "running" || run.Status == "stopping" {
-			activeMatches = append(activeMatches, run.ID)
-		} else if !onlyActive && run.Status != "unknown" {
-			replayableMatches = append(replayableMatches, run.ID)
+			activeMatches = append(activeMatches, run)
+		} else if !onlyActive && (run.Status != "unknown" || mode == "logs") {
+			replayableMatches = append(replayableMatches, run)
 		}
 	}
 
 	if len(activeMatches) == 1 {
-		return activeMatches[0], nil
+		return activeMatches[0].ID, nil
 	}
 	if len(activeMatches) > 1 {
-		return "", errors.New("ambiguousRun")
+		return "", newStructuredError("ambiguousRun", "", "", runCandidatesFromRuns(activeMatches))
 	}
 	if onlyActive {
-		return "", errors.New("noActiveRun")
+		return "", newStructuredError("noActiveRun", "", "", nil)
+	}
+	if mode == "logs" && len(replayableMatches) >= 1 {
+		// state.Runs is ordered newest-first; for logs without an active run,
+		// return the most recent run in scope so `yourun logs` works effortlessly.
+		return replayableMatches[0].ID, nil
 	}
 	if len(replayableMatches) == 1 {
-		return replayableMatches[0], nil
+		return replayableMatches[0].ID, nil
 	}
 	if len(replayableMatches) > 1 {
-		return "", errors.New("ambiguousRun")
+		return "", newStructuredError("ambiguousRun", "", "", runCandidatesFromRuns(replayableMatches[:min(len(replayableMatches), 8)]))
 	}
-	return "", errors.New("runMissing")
+	return "", newStructuredError("runMissing", "", "", nil)
 }

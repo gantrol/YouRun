@@ -9,11 +9,13 @@ import (
 	"syscall"
 )
 
-func replaceFile(from, to string) error          { return os.Rename(from, to) }
-func openSnapshot(path string) (*os.File, error) { return os.Open(path) }
-func prepareDetached(cmd *exec.Cmd)              { cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} }
-func prepareChild(cmd *exec.Cmd)                 { cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} }
-func prepareHidden(cmd *exec.Cmd)                {}
+func replaceFile(from, to string) error                 { return os.Rename(from, to) }
+func openSnapshot(path string) (*os.File, error)        { return os.Open(path) }
+func prepareDetached(cmd *exec.Cmd)                     { cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} }
+func prepareDetachedFallback(_ *exec.Cmd, _ error) bool { return false }
+func prepareChild(cmd *exec.Cmd)                        { cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} }
+func prepareHidden(cmd *exec.Cmd)                       {}
+func CanLaunchDetached() (bool, string)                 { return true, "setsid" }
 
 type processGroup struct{ pid int }
 

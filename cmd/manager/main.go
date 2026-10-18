@@ -5,7 +5,11 @@ package main
 import (
 	"os"
 
+	"commandmanager.local/core/desktop"
 	"commandmanager.local/core/internal/cli"
 )
 
-func main() { os.Exit(cli.Main(os.Args[1:])) }
+func main() {
+	desktop.RegisterCLIResourceHandler()
+	os.Exit(cli.Main(os.Args[1:]))
+}
