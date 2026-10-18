@@ -492,6 +492,7 @@ function SettingsSection({
 
 export function GlobalSettings({
   startup,
+  agentIntegration,
   onUpdates,
   updateReady,
   projects,
@@ -509,6 +510,7 @@ export function GlobalSettings({
   onDeleteCommand,
 }: {
   startup?: ReactNode;
+  agentIntegration?: ReactNode;
   onUpdates?: () => void;
   updateReady: boolean;
   projects: Project[];
@@ -561,6 +563,7 @@ export function GlobalSettings({
           />
         </SettingsRow>
         {startup && <SettingsRow label={m.startupAtLogin}>{startup}</SettingsRow>}
+        {agentIntegration && <SettingsRow label={m.agentIntegration}>{agentIntegration}</SettingsRow>}
         {onUpdates && <div className="py-1">
           <Button
             variant="ghost"

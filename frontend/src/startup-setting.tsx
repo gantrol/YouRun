@@ -4,11 +4,27 @@ import { Checkbox } from "@/renderer/components/ui/checkbox";
 import { api } from "./api";
 import type { Messages } from "./messages";
 
-type StartupSettings = { enabled: boolean; supported: boolean; reason?: string };
+type EndpointToggleSettings = { enabled: boolean; supported: boolean; reason?: string };
 
-export function StartupSetting({ m }: { m: Messages }) {
+function ToggleEndpointSetting({
+  endpoint,
+  label,
+  onText,
+  offText,
+  loadFailedKey,
+  saveFailedKey,
+  m,
+}: {
+  endpoint: string;
+  label: string;
+  onText: string;
+  offText: string;
+  loadFailedKey: keyof Messages;
+  saveFailedKey: keyof Messages;
+  m: Messages;
+}) {
   const id = useId();
-  const [state, setState] = useState<StartupSettings>();
+  const [state, setState] = useState<EndpointToggleSettings>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -23,7 +39,7 @@ export function StartupSetting({ m }: { m: Messages }) {
     read.current = controller;
     setLoading(true);
     try {
-      const next = await api<StartupSettings>("startup", "GET", undefined, controller.signal);
+      const next = await api<EndpointToggleSettings>(endpoint, "GET", undefined, controller.signal);
       if (!controller.signal.aborted && mounted.current) {
         setState(next);
         setError("");
@@ -31,12 +47,12 @@ export function StartupSetting({ m }: { m: Messages }) {
     } catch {
       if (!controller.signal.aborted && mounted.current) {
         setState(undefined);
-        setError("startupLoadFailed");
+        setError(loadFailedKey);
       }
     } finally {
       if (!controller.signal.aborted && mounted.current) setLoading(false);
     }
-  }, []);
+  }, [endpoint, loadFailedKey]);
 
   useEffect(() => {
     mounted.current = true;
@@ -59,18 +75,18 @@ export function StartupSetting({ m }: { m: Messages }) {
     setSaving(true);
     setError("");
     try {
-      const next = await api<StartupSettings>("startup", "PUT", { enabled });
+      const next = await api<EndpointToggleSettings>(endpoint, "PUT", { enabled });
       if (mounted.current) setState(next);
     } catch (cause) {
       // A response can be lost after the OS has committed. Reconcile without
       // displaying the requested value as a successful save.
       try {
-        const next = await api<StartupSettings>("startup");
+        const next = await api<EndpointToggleSettings>(endpoint);
         if (mounted.current) setState(next);
       } catch {
         if (mounted.current) setState(undefined);
       }
-      if (mounted.current) setError(cause instanceof Error ? cause.message : "startupSaveFailed");
+      if (mounted.current) setError(cause instanceof Error ? cause.message : saveFailedKey);
     } finally {
       busy.current = false;
       if (mounted.current) setSaving(false);
@@ -80,16 +96,44 @@ export function StartupSetting({ m }: { m: Messages }) {
   const message = error || state?.reason;
   return <div className="space-y-2" aria-busy={loading || saving}>
     <label htmlFor={id} className="flex min-h-9 items-center gap-2">
-      <Checkbox id={id} checked={state?.enabled ?? false} aria-label={m.startupAtLogin}
+      <Checkbox id={id} checked={state?.enabled ?? false} aria-label={label}
         aria-describedby={message ? `${id}-message` : undefined}
         disabled={loading || saving || !state?.supported}
         onCheckedChange={(checked) => { void change(checked === true); }} />
-      <span>{loading ? m.loading : saving ? m.saving : state?.enabled ? m.startupOn : m.startupOff}</span>
+      <span>{loading ? m.loading : saving ? m.saving : state?.enabled ? onText : offText}</span>
     </label>
     {message && <span id={`${id}-message`} role={error ? "alert" : "status"}
       className={error ? "block text-xs text-destructive" : "block text-xs text-muted-foreground"}>
-      {m[message as keyof Messages] ?? m.startupSaveFailed}
+      {m[message as keyof Messages] ?? m[saveFailedKey]}
     </span>}
     {error && !loading && !saving && <Button variant="outline" size="sm" onClick={() => { void refresh(); }}>{m.retry}</Button>}
   </div>;
+}
+
+export function StartupSetting({ m }: { m: Messages }) {
+  return (
+    <ToggleEndpointSetting
+      endpoint="startup"
+      label={m.startupAtLogin}
+      onText={m.startupOn}
+      offText={m.startupOff}
+      loadFailedKey="startupLoadFailed"
+      saveFailedKey="startupSaveFailed"
+      m={m}
+    />
+  );
+}
+
+export function AgentIntegrationSetting({ m }: { m: Messages }) {
+  return (
+    <ToggleEndpointSetting
+      endpoint="agent-integration"
+      label={m.agentIntegration}
+      onText={m.agentIntegrationOn}
+      offText={m.agentIntegrationOff}
+      loadFailedKey="agentIntegrationLoadFailed"
+      saveFailedKey="agentIntegrationSaveFailed"
+      m={m}
+    />
+  );
 }

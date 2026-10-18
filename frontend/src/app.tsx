@@ -34,7 +34,7 @@ import {
   ProjectSettings,
   GlobalSettings,
 } from "./settings-panels";
-import { StartupSetting } from "./startup-setting";
+import { AgentIntegrationSetting, StartupSetting } from "./startup-setting";
 import { RunOutput } from "./run-output";
 import "./style.css";
 import { api, type Snapshot } from "./api";
@@ -1144,6 +1144,7 @@ export function App({
               {panel.kind === "settings" && (
                 <GlobalSettings
                   startup={<StartupSetting m={m} />}
+                  agentIntegration={<AgentIntegrationSetting m={m} />}
                   onUpdates={updates.state && !updates.state.disabled ? () => open({ kind: "updates" }) : undefined}
                   updateReady={updates.state?.phase === "ready"}
                   projects={projects}

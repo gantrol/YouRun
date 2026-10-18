@@ -25,7 +25,7 @@ import type { Messages } from "./messages";
 import { formatSourceSummary } from "./project-workspaces";
 import { YouRunLogo } from "./yourun-logo";
 
-export type ProSubview = "processes" | "ports" | "files";
+export type ProSubview = "home" | "processes" | "ports" | "files";
 
 export type ProcessItem = {
   pid: number;
@@ -42,6 +42,12 @@ export type ProcessItem = {
   cpuPercent: number | null;
   cpuSampling?: boolean;
   memoryBytes: number;
+  gpuPercent?: number | null;
+  gpuSampling?: boolean;
+  gpuMemoryBytes?: number;
+  networkBytesPerSec?: number | null;
+  networkSampling?: boolean;
+  networkConnections?: number;
   ports?: number[];
   ownership: "managed" | "external" | "unconfirmed" | string;
   runId?: string;
@@ -130,6 +136,8 @@ export type ResourceOriginContext = {
   reviewStatus: "active" | "stale" | "released";
 };
 
+export type ProcessSortBy = "default" | "cpu" | "memory" | "gpu" | "network";
+
 export type ProModeState = {
   subview: ProSubview;
   processes: {
@@ -137,7 +145,7 @@ export type ProModeState = {
     project: string;
     workspace: string;
     ownership: string;
-    sortBy: "default" | "cpu" | "memory";
+    sortBy: ProcessSortBy;
     sortDesc: boolean;
     selectedPid?: number;
   };
@@ -158,7 +166,7 @@ export type ProModeState = {
 
 export function createInitialProModeState(): ProModeState {
   return {
-    subview: "processes",
+    subview: "home",
     processes: {
       query: "",
       project: "all",
@@ -190,6 +198,77 @@ function formatMemory(bytes: number): string {
     return `${Math.max(0.1, mb).toFixed(1)} MB`;
   }
   return `${Math.round(mb).toLocaleString()} MB`;
+}
+
+function formatNetworkRate(bytesPerSec: number | null | undefined, sampling?: boolean, m?: Messages): string {
+  if (sampling && m) return m.cpuSampling;
+  if (bytesPerSec == null || Number.isNaN(bytesPerSec)) return "--";
+  if (bytesPerSec <= 0) return "0 B/s";
+  if (bytesPerSec < 1024) {
+    return `${Math.round(bytesPerSec)} B/s`;
+  }
+  const kb = bytesPerSec / 1024;
+  if (kb < 1024) {
+    return `${kb >= 100 ? Math.round(kb) : kb.toFixed(1)} KB/s`;
+  }
+  const mb = kb / 1024;
+  if (mb < 1024) {
+    return `${mb >= 100 ? Math.round(mb) : mb.toFixed(1)} MB/s`;
+  }
+  return `${(mb / 1024).toFixed(1)} GB/s`;
+}
+
+function BountyRabbitBadge({
+  rank,
+  m,
+  selected = false,
+}: {
+  rank: 1 | 2 | 3;
+  m: Messages;
+  selected?: boolean;
+}) {
+  const meta =
+    rank === 1
+      ? {
+          label: m.goldRabbit,
+          fill: "#d49a15",
+          ink: "#593b04",
+          cls: selected
+            ? "border-selected-foreground/35 bg-selected-foreground/15 text-selected-foreground"
+            : "border-[#d8b04c]/75 bg-[#fbf3dc] text-[#7a5308] dark:border-[#b8891e]/60 dark:bg-[#2b210a] dark:text-[#f0c451]",
+        }
+      : rank === 2
+        ? {
+            label: m.silverRabbit,
+            fill: "#7d8790",
+            ink: "#333a40",
+            cls: selected
+              ? "border-selected-foreground/35 bg-selected-foreground/15 text-selected-foreground"
+              : "border-[#b4bcc4]/80 bg-[#eef0f2] text-[#464e56] dark:border-[#5b636b]/60 dark:bg-[#1e2226] dark:text-[#c8cfd6]",
+          }
+        : {
+            label: m.bronzeRabbit,
+            fill: "#b86838",
+            ink: "#54290e",
+            cls: selected
+              ? "border-selected-foreground/35 bg-selected-foreground/15 text-selected-foreground"
+              : "border-[#cf9672]/75 bg-[#f7ebe2] text-[#7c4220] dark:border-[#94532c]/60 dark:bg-[#29180e] dark:text-[#e49d73]",
+          };
+
+  return (
+    <span
+      className={`inline-flex h-5 shrink-0 items-center gap-1 border px-1.5 text-[11px] font-medium leading-none ${meta.cls}`}
+      style={
+        {
+          "--yourun-logo-fill": meta.fill,
+          "--yourun-logo-ink": meta.ink,
+        } as React.CSSProperties
+      }
+    >
+      <YouRunLogo className="size-3.5 shrink-0" />
+      <span>{meta.label}</span>
+    </span>
+  );
 }
 
 function formatObservedTime(iso: string | undefined, locale: string): string {
@@ -293,6 +372,12 @@ type ProcessGroup = {
   totalCpu: number | null;
   cpuSampling: boolean;
   totalMemory: number;
+  totalGpu: number | null;
+  gpuSampling: boolean;
+  totalGpuMemory: number;
+  totalNetwork: number | null;
+  networkSampling: boolean;
+  totalNetworkConnections: number;
   ownership: string;
   projectName?: string;
   workspaceName?: string;
@@ -452,7 +537,7 @@ export function ProModeWorkspace({
       return;
     }
 
-    if (state.subview === "processes" && (!procData.observedAt || isRecheck)) {
+    if ((state.subview === "home" || state.subview === "processes") && (!procData.observedAt || isRecheck)) {
       void loadProcesses();
     } else if (state.subview === "ports" && (!portData.observedAt || isRecheck)) {
       void loadPorts();
@@ -480,7 +565,7 @@ export function ProModeWorkspace({
         origin: prev.origin ? { ...prev.origin, reviewStatus: "released" } : undefined,
       }));
     }
-    if (state.subview === "processes") {
+    if (state.subview === "home" || state.subview === "processes") {
       void loadProcesses();
     } else if (state.subview === "ports") {
       void loadPorts();
@@ -517,7 +602,7 @@ export function ProModeWorkspace({
   }, [projects, projectDetails, state.processes.project, m]);
 
   const filteredProcesses = useMemo(() => {
-    const q = state.processes.query.trim().toLowerCase();
+    const q = state.subview === "processes" ? state.processes.query.trim().toLowerCase() : "";
     const isNumeric = /^\d+$/.test(q);
     const list = procData.items.filter((item) => {
       if (state.processes.project !== "all" && item.projectId !== state.processes.project) {
@@ -560,6 +645,20 @@ export function ProModeWorkspace({
             ? b.memoryBytes - a.memoryBytes
             : a.memoryBytes - b.memoryBytes;
         }
+      } else if (state.processes.sortBy === "gpu") {
+        const ga = a.gpuPercent ?? -1;
+        const gb = b.gpuPercent ?? -1;
+        if (ga !== gb) return state.processes.sortDesc ? gb - ga : ga - gb;
+        const ma = a.gpuMemoryBytes ?? 0;
+        const mb = b.gpuMemoryBytes ?? 0;
+        if (ma !== mb) return state.processes.sortDesc ? mb - ma : ma - mb;
+      } else if (state.processes.sortBy === "network") {
+        const na = a.networkBytesPerSec ?? -1;
+        const nb = b.networkBytesPerSec ?? -1;
+        if (na !== nb) return state.processes.sortDesc ? nb - na : na - nb;
+        const ca = a.networkConnections ?? 0;
+        const cb = b.networkConnections ?? 0;
+        if (ca !== cb) return state.processes.sortDesc ? cb - ca : ca - cb;
       } else {
         if (a.ownership !== b.ownership) {
           if (a.ownership === "managed") return -1;
@@ -569,10 +668,10 @@ export function ProModeWorkspace({
       }
       return a.pid - b.pid;
     });
-  }, [procData.items, state.processes]);
+  }, [procData.items, state.processes, state.subview]);
 
   const processGroups = useMemo<ProcessGroup[]>(() => {
-    const q = state.processes.query.trim().toLowerCase();
+    const q = state.subview === "processes" ? state.processes.query.trim().toLowerCase() : "";
     const isNumeric = /^\d+$/.test(q);
     const map = new Map<string, ProcessItem[]>();
 
@@ -599,6 +698,14 @@ export function ProModeWorkspace({
       let totalCpuSum = 0;
       let hasCpu = false;
       let cpuSampling = false;
+      let totalGpuSum = 0;
+      let hasGpu = false;
+      let gpuSampling = false;
+      let totalGpuMemory = 0;
+      let totalNetworkSum = 0;
+      let hasNetwork = false;
+      let networkSampling = false;
+      let totalNetworkConnections = 0;
       for (const item of items) {
         totalMemory += item.memoryBytes || 0;
         if (item.cpuPercent != null) {
@@ -608,6 +715,22 @@ export function ProModeWorkspace({
         if (item.cpuSampling) {
           cpuSampling = true;
         }
+        if (item.gpuPercent != null) {
+          totalGpuSum += item.gpuPercent;
+          hasGpu = true;
+        }
+        if (item.gpuSampling) {
+          gpuSampling = true;
+        }
+        totalGpuMemory += item.gpuMemoryBytes || 0;
+        if (item.networkBytesPerSec != null) {
+          totalNetworkSum += item.networkBytesPerSec;
+          hasNetwork = true;
+        }
+        if (item.networkSampling) {
+          networkSampling = true;
+        }
+        totalNetworkConnections += item.networkConnections || 0;
       }
       groups.push({
         key,
@@ -615,9 +738,15 @@ export function ProModeWorkspace({
         icon,
         primary,
         items,
-        totalCpu: hasCpu ? totalCpuSum : null,
+        totalCpu: hasCpu ? Math.min(100, totalCpuSum) : null,
         cpuSampling: !hasCpu && cpuSampling,
         totalMemory,
+        totalGpu: hasGpu ? Math.min(100, totalGpuSum) : null,
+        gpuSampling: !hasGpu && gpuSampling,
+        totalGpuMemory,
+        totalNetwork: hasNetwork ? totalNetworkSum : null,
+        networkSampling: !hasNetwork && networkSampling,
+        totalNetworkConnections,
         ownership: primary.ownership,
         projectName: primary.projectName,
         workspaceName: primary.workspaceName,
@@ -640,6 +769,24 @@ export function ProModeWorkspace({
             ? b.totalMemory - a.totalMemory
             : a.totalMemory - b.totalMemory;
         }
+      } else if (state.processes.sortBy === "gpu") {
+        const ga = a.totalGpu ?? -1;
+        const gb = b.totalGpu ?? -1;
+        if (ga !== gb) return state.processes.sortDesc ? gb - ga : ga - gb;
+        if (a.totalGpuMemory !== b.totalGpuMemory) {
+          return state.processes.sortDesc
+            ? b.totalGpuMemory - a.totalGpuMemory
+            : a.totalGpuMemory - b.totalGpuMemory;
+        }
+      } else if (state.processes.sortBy === "network") {
+        const na = a.totalNetwork ?? -1;
+        const nb = b.totalNetwork ?? -1;
+        if (na !== nb) return state.processes.sortDesc ? nb - na : na - nb;
+        if (a.totalNetworkConnections !== b.totalNetworkConnections) {
+          return state.processes.sortDesc
+            ? b.totalNetworkConnections - a.totalNetworkConnections
+            : a.totalNetworkConnections - b.totalNetworkConnections;
+        }
       } else {
         if (a.ownership !== b.ownership) {
           if (a.ownership === "managed") return -1;
@@ -651,16 +798,69 @@ export function ProModeWorkspace({
     });
 
     return groups;
-  }, [filteredProcesses, state.processes.query, state.processes.sortBy, state.processes.sortDesc]);
+  }, [filteredProcesses, state.processes.query, state.processes.sortBy, state.processes.sortDesc, state.subview]);
+
+  const bountyRankings = useMemo(() => {
+    const byCpu = [...processGroups]
+      .sort((a, b) => {
+        const ca = a.totalCpu ?? -1;
+        const cb = b.totalCpu ?? -1;
+        if (cb !== ca) return cb - ca;
+        return b.totalMemory - a.totalMemory;
+      })
+      .slice(0, 3);
+
+    const byMemory = [...processGroups]
+      .sort((a, b) => {
+        if (b.totalMemory !== a.totalMemory) return b.totalMemory - a.totalMemory;
+        return (b.totalCpu ?? -1) - (a.totalCpu ?? -1);
+      })
+      .slice(0, 3);
+
+    const byGpu = [...processGroups]
+      .sort((a, b) => {
+        const ga = a.totalGpu ?? -1;
+        const gb = b.totalGpu ?? -1;
+        if (gb !== ga) return gb - ga;
+        if (b.totalGpuMemory !== a.totalGpuMemory) return b.totalGpuMemory - a.totalGpuMemory;
+        return b.totalMemory - a.totalMemory;
+      })
+      .slice(0, 3);
+
+    const byNetwork = [...processGroups]
+      .sort((a, b) => {
+        const na = a.totalNetwork ?? -1;
+        const nb = b.totalNetwork ?? -1;
+        if (nb !== na) return nb - na;
+        if (b.totalNetworkConnections !== a.totalNetworkConnections) {
+          return b.totalNetworkConnections - a.totalNetworkConnections;
+        }
+        return b.totalMemory - a.totalMemory;
+      })
+      .slice(0, 3);
+
+    return {
+      cpu: byCpu,
+      memory: byMemory,
+      gpu: byGpu,
+      network: byNetwork,
+    };
+  }, [processGroups]);
 
   const selectedProcess = useMemo(() => {
     if (!filteredProcesses.length) return undefined;
     return (
       filteredProcesses.find((p) => p.pid === state.processes.selectedPid) ??
+      bountyRankings.cpu[0]?.primary ??
       processGroups[0]?.primary ??
       filteredProcesses[0]
     );
-  }, [filteredProcesses, processGroups, state.processes.selectedPid]);
+  }, [filteredProcesses, bountyRankings.cpu, processGroups, state.processes.selectedPid]);
+
+  const selectedGroup = useMemo(() => {
+    if (!selectedProcess) return undefined;
+    return processGroups.find((g) => g.items.some((i) => i.pid === selectedProcess.pid));
+  }, [processGroups, selectedProcess]);
 
   const filteredPorts = useMemo(() => {
     const rawQ = state.ports.query.trim().toLowerCase();
@@ -712,7 +912,7 @@ export function ProModeWorkspace({
     state.origin?.subview === state.subview && state.origin?.reviewStatus === "released";
 
   const activeStats = useMemo(() => {
-    if (state.subview === "processes") {
+    if (state.subview === "home" || state.subview === "processes") {
       const managedCount = filteredProcesses.filter((i) => i.ownership === "managed").length;
       return {
         total: filteredProcesses.length,
@@ -836,6 +1036,7 @@ export function ProModeWorkspace({
         <div className="flex items-center gap-1" role="tablist" aria-label={m.proMode}>
           {(
             [
+              ["home", m.proHome],
               ["processes", m.proProcesses],
               ["ports", m.proPorts],
               ["files", m.proFiles],
@@ -886,95 +1087,110 @@ export function ProModeWorkspace({
       </header>
 
       {/* Filter bar per subview */}
-      {state.subview === "processes" && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface-sunken/30 px-4 py-2">
-          <div className="relative min-w-52 flex-1">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              type="search"
-              value={state.processes.query}
-              onChange={(e) =>
-                onStateChange((prev) => ({
-                  ...prev,
-                  processes: { ...prev.processes, query: e.target.value },
-                }))
-              }
-              placeholder={m.searchProcessesPlaceholder}
-              aria-label={m.searchProcessesPlaceholder}
-              className="h-8 pl-8 pr-7 text-xs [&::-webkit-search-cancel-button]:appearance-none"
-            />
-            {state.processes.query && (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="absolute right-1 top-1/2 size-6 -translate-y-1/2"
-                onClick={() =>
+      {(state.subview === "home" || state.subview === "processes") && (
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-sunken/30 px-4 py-2">
+          {state.subview === "home" ? (
+            <div className="flex min-h-8 flex-wrap items-center gap-2">
+              <h2 className="text-xs font-semibold tracking-tight text-foreground">
+                {m.bountyBoard}
+              </h2>
+              <div className="flex items-center gap-1.5" aria-hidden="true">
+                <BountyRabbitBadge rank={1} m={m} />
+                <BountyRabbitBadge rank={2} m={m} />
+                <BountyRabbitBadge rank={3} m={m} />
+              </div>
+            </div>
+          ) : (
+            <div className="relative min-w-52 flex-1">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                type="search"
+                value={state.processes.query}
+                onChange={(e) =>
                   onStateChange((prev) => ({
                     ...prev,
-                    processes: { ...prev.processes, query: "" },
+                    processes: { ...prev.processes, query: e.target.value },
                   }))
                 }
-                aria-label={m.clear}
-              >
-                <X className="size-3.5" />
-              </Button>
-            )}
-          </div>
-          <div className="w-36">
-            <Picker
-              label={m.colOwnership}
-              value={state.processes.ownership}
-              options={[
-                ["all", m.allOwnership],
-                ["managed", m.ownershipManaged],
-                ["external", m.ownershipExternal],
-                ["unconfirmed", m.ownershipUnconfirmed],
-              ]}
-              onChange={(ownership) =>
-                onStateChange((prev) => ({
-                  ...prev,
-                  processes: { ...prev.processes, ownership },
-                }))
-              }
-              className="h-8 text-xs"
-            />
-          </div>
-          <div className="w-40">
-            <Picker
-              label={m.project}
-              value={state.processes.project}
-              options={[
-                ["all", m.allProjects],
-                ...projects.map((p): [string, string] => [p.id, p.name]),
-              ]}
-              onChange={(project) =>
-                onStateChange((prev) => ({
-                  ...prev,
-                  processes: { ...prev.processes, project, workspace: "all" },
-                }))
-              }
-              className="h-8 text-xs"
-            />
-          </div>
-          {workspaceOptions.length > 1 && (
-            <div className="w-44">
+                placeholder={m.searchProcessesPlaceholder}
+                aria-label={m.searchProcessesPlaceholder}
+                className="h-8 pl-8 pr-7 text-xs [&::-webkit-search-cancel-button]:appearance-none"
+              />
+              {state.processes.query && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="absolute right-1 top-1/2 size-6 -translate-y-1/2"
+                  onClick={() =>
+                    onStateChange((prev) => ({
+                      ...prev,
+                      processes: { ...prev.processes, query: "" },
+                    }))
+                  }
+                  aria-label={m.clear}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              )}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-36">
               <Picker
-                label={m.workspace}
-                value={state.processes.workspace}
-                options={workspaceOptions}
-                onChange={(workspace) =>
+                label={m.colOwnership}
+                value={state.processes.ownership}
+                options={[
+                  ["all", m.allOwnership],
+                  ["managed", m.ownershipManaged],
+                  ["external", m.ownershipExternal],
+                  ["unconfirmed", m.ownershipUnconfirmed],
+                ]}
+                onChange={(ownership) =>
                   onStateChange((prev) => ({
                     ...prev,
-                    processes: { ...prev.processes, workspace },
+                    processes: { ...prev.processes, ownership },
                   }))
                 }
                 className="h-8 text-xs"
               />
             </div>
-          )}
+            <div className="w-40">
+              <Picker
+                label={m.project}
+                value={state.processes.project}
+                options={[
+                  ["all", m.allProjects],
+                  ...projects.map((p): [string, string] => [p.id, p.name]),
+                ]}
+                onChange={(project) =>
+                  onStateChange((prev) => ({
+                    ...prev,
+                    processes: { ...prev.processes, project, workspace: "all" },
+                  }))
+                }
+                className="h-8 text-xs"
+              />
+            </div>
+            {workspaceOptions.length > 1 && (
+              <div className="w-44">
+                <Picker
+                  label={m.workspace}
+                  value={state.processes.workspace}
+                  options={workspaceOptions}
+                  onChange={(workspace) =>
+                    onStateChange((prev) => ({
+                      ...prev,
+                      processes: { ...prev.processes, workspace },
+                    }))
+                  }
+                  className="h-8 text-xs"
+                />
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1175,19 +1391,243 @@ export function ProModeWorkspace({
 
       {/* Main Split Content Area */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Left Table Area */}
+        {/* Left Table / Bounty Board Area */}
         <div
           className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-auto ${
             narrowDetailOpen ? "hidden @min-[63rem]/desktop:flex" : "flex"
           }`}
         >
+          {state.subview === "home" && (
+            <div className="grid grid-cols-1 border-b border-border @min-[44rem]/desktop:grid-cols-2">
+              {(
+                [
+                  {
+                    id: "cpu" as const,
+                    label: m.colCpu,
+                    items: bountyRankings.cpu,
+                    borderCls: "border-b border-border @min-[44rem]/desktop:border-r",
+                  },
+                  {
+                    id: "memory" as const,
+                    label: m.colMemory,
+                    items: bountyRankings.memory,
+                    borderCls: "border-b border-border",
+                  },
+                  {
+                    id: "gpu" as const,
+                    label: m.colGpu,
+                    items: bountyRankings.gpu,
+                    borderCls:
+                      "border-b border-border @min-[44rem]/desktop:border-b-0 @min-[44rem]/desktop:border-r",
+                  },
+                  {
+                    id: "network" as const,
+                    label: m.colNetwork,
+                    items: bountyRankings.network,
+                    borderCls: "",
+                  },
+                ]
+              ).map((cat) => (
+                <section
+                  key={cat.id}
+                  aria-label={`${m.bountyBoard} · ${cat.label}`}
+                  className={`flex min-w-0 flex-col ${cat.borderCls}`}
+                >
+                  <div className="flex h-8 shrink-0 items-center justify-between border-b border-border bg-surface-sunken px-3 text-xs">
+                    <span className="font-medium text-foreground">{cat.label}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onStateChange((prev) => ({
+                          ...prev,
+                          subview: "processes",
+                          processes: {
+                            ...prev.processes,
+                            sortBy: cat.id,
+                            sortDesc: true,
+                          },
+                        }))
+                      }
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <span>{m.proProcesses}</span>
+                      <span aria-hidden="true">→</span>
+                    </button>
+                  </div>
+                  <div className="divide-y divide-border/60">
+                    {([1, 2, 3] as const).map((rank) => {
+                      const group = cat.items[rank - 1];
+                      if (!group) {
+                        return (
+                          <div
+                            key={`${cat.id}-empty-${rank}`}
+                            className="flex h-13 items-center justify-between gap-2.5 px-3 text-xs text-muted-foreground"
+                          >
+                            <div className="flex items-center gap-2.5 opacity-45">
+                              <BountyRabbitBadge rank={rank} m={m} />
+                              <span>--</span>
+                            </div>
+                            <span className="font-mono tabular-nums">--</span>
+                          </div>
+                        );
+                      }
+
+                      const targetItem =
+                        cat.id === "cpu"
+                          ? [...group.items].sort(
+                              (a, b) => (b.cpuPercent ?? -1) - (a.cpuPercent ?? -1),
+                            )[0]
+                          : cat.id === "memory"
+                            ? [...group.items].sort((a, b) => b.memoryBytes - a.memoryBytes)[0]
+                            : cat.id === "gpu"
+                              ? [...group.items].sort(
+                                  (a, b) =>
+                                    (b.gpuPercent ?? -1) - (a.gpuPercent ?? -1) ||
+                                    (b.gpuMemoryBytes ?? 0) - (a.gpuMemoryBytes ?? 0),
+                                )[0]
+                              : [...group.items].sort(
+                                  (a, b) =>
+                                    (b.networkBytesPerSec ?? -1) - (a.networkBytesPerSec ?? -1) ||
+                                    (b.networkConnections ?? 0) - (a.networkConnections ?? 0),
+                                )[0];
+                      const rep = targetItem ?? group.primary;
+                      const rowSelected = selectedGroup?.key === group.key;
+
+                      const primaryMetric =
+                        cat.id === "cpu"
+                          ? group.cpuSampling
+                            ? m.cpuSampling
+                            : group.totalCpu != null
+                              ? `${group.totalCpu.toFixed(1)}%`
+                              : "--"
+                          : cat.id === "memory"
+                            ? formatMemory(group.totalMemory)
+                            : cat.id === "gpu"
+                              ? group.gpuSampling
+                                ? m.cpuSampling
+                                : group.totalGpu != null
+                                  ? `${group.totalGpu.toFixed(1)}%`
+                                  : group.totalGpuMemory > 0
+                                    ? formatMemory(group.totalGpuMemory)
+                                    : "--"
+                              : formatNetworkRate(group.totalNetwork, group.networkSampling, m);
+
+                      const secondaryMetric =
+                        cat.id === "cpu"
+                          ? formatMemory(group.totalMemory)
+                          : cat.id === "memory"
+                            ? group.totalCpu != null
+                              ? `${group.totalCpu.toFixed(1)}% CPU`
+                              : `PID ${rep.pid}`
+                            : cat.id === "gpu"
+                              ? group.totalGpuMemory > 0
+                                ? `${m.gpuMemoryLabel} ${formatMemory(group.totalGpuMemory)}`
+                                : formatMemory(group.totalMemory)
+                              : group.totalNetworkConnections > 0
+                                ? `${group.totalNetworkConnections} ${m.networkConnectionsUnit}`
+                                : formatMemory(group.totalMemory);
+
+                      return (
+                        <div
+                          key={`${cat.id}-${group.key}`}
+                          onClick={() => {
+                            onStateChange((prev) => ({
+                              ...prev,
+                              processes: { ...prev.processes, selectedPid: rep.pid },
+                            }));
+                            setNarrowDetailOpen(true);
+                          }}
+                          className={`flex h-13 cursor-pointer select-none items-center justify-between gap-2.5 px-3 text-xs transition-colors ${
+                            rowSelected
+                              ? "bg-selected text-selected-foreground"
+                              : "hover:bg-surface-sunken/70"
+                          }`}
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                            <BountyRabbitBadge rank={rank} m={m} selected={rowSelected} />
+                            <ProcessIcon
+                              name={group.primary.name}
+                              displayName={group.title}
+                              icon={group.icon}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate font-medium">{group.title}</span>
+                                {group.items.length > 1 && (
+                                  <span
+                                    className={`shrink-0 font-mono text-[11px] tabular-nums ${
+                                      rowSelected
+                                        ? "text-selected-foreground/75"
+                                        : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    ({group.items.length})
+                                  </span>
+                                )}
+                                {group.ownership === "managed" && (
+                                  <span
+                                    className={`shrink-0 border px-1 py-0.5 text-[10px] font-medium leading-none ${
+                                      rowSelected
+                                        ? "border-selected-foreground/30 bg-selected-foreground/15 text-selected-foreground"
+                                        : "border-success/30 bg-success-surface text-success"
+                                    }`}
+                                  >
+                                    YouRun
+                                  </span>
+                                )}
+                              </div>
+                              <div
+                                className={`truncate font-mono text-[10px] tabular-nums ${
+                                  rowSelected
+                                    ? "text-selected-foreground/75"
+                                    : "text-muted-foreground"
+                                }`}
+                              >
+                                {group.ownership === "managed" && group.projectName
+                                  ? [
+                                      group.projectName,
+                                      formatWorkspaceName(group.workspaceName, m),
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ")
+                                  : `PID ${rep.pid}`}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right font-mono tabular-nums">
+                            <div
+                              className={`text-xs font-semibold ${
+                                rowSelected ? "text-selected-foreground" : "text-foreground"
+                              }`}
+                            >
+                              {primaryMetric}
+                            </div>
+                            <div
+                              className={`text-[10px] ${
+                                rowSelected
+                                  ? "text-selected-foreground/75"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {secondaryMetric}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+
           {state.subview === "processes" && (
             <table className="w-full table-fixed border-collapse text-left text-xs">
               <thead className="sticky top-0 z-10 border-b border-border bg-surface-sunken text-muted-foreground">
                 <tr className="h-8">
                   <th className="px-3 py-1.5 font-medium">{m.colProcess}</th>
-                  <th className="w-20 px-2.5 py-1.5 text-right font-medium">{m.colPid}</th>
-                  <th className="w-24 px-2.5 py-1.5 text-right font-medium">
+                  <th className="w-18 px-2 py-1.5 text-right font-medium">{m.colPid}</th>
+                  <th className="w-20 px-2 py-1.5 text-right font-medium">
                     <button
                       type="button"
                       className="ml-auto inline-flex items-center justify-end gap-1 hover:text-foreground"
@@ -1212,7 +1652,7 @@ export function ProModeWorkspace({
                         ))}
                     </button>
                   </th>
-                  <th className="w-28 px-2.5 py-1.5 text-right font-medium">
+                  <th className="w-24 px-2 py-1.5 text-right font-medium">
                     <button
                       type="button"
                       className="ml-auto inline-flex items-center justify-end gap-1 hover:text-foreground"
@@ -1239,7 +1679,59 @@ export function ProModeWorkspace({
                         ))}
                     </button>
                   </th>
-                  <th className="w-52 px-3 py-1.5 font-medium">{m.colProjectWorkspace}</th>
+                  <th className="w-20 px-2 py-1.5 text-right font-medium">
+                    <button
+                      type="button"
+                      className="ml-auto inline-flex items-center justify-end gap-1 hover:text-foreground"
+                      onClick={() =>
+                        onStateChange((prev) => ({
+                          ...prev,
+                          processes: {
+                            ...prev.processes,
+                            sortBy: "gpu",
+                            sortDesc:
+                              prev.processes.sortBy === "gpu" ? !prev.processes.sortDesc : true,
+                          },
+                        }))
+                      }
+                    >
+                      {m.colGpu}
+                      {state.processes.sortBy === "gpu" &&
+                        (state.processes.sortDesc ? (
+                          <ArrowDown className="size-3" />
+                        ) : (
+                          <ArrowUp className="size-3" />
+                        ))}
+                    </button>
+                  </th>
+                  <th className="w-24 px-2 py-1.5 text-right font-medium">
+                    <button
+                      type="button"
+                      className="ml-auto inline-flex items-center justify-end gap-1 hover:text-foreground"
+                      onClick={() =>
+                        onStateChange((prev) => ({
+                          ...prev,
+                          processes: {
+                            ...prev.processes,
+                            sortBy: "network",
+                            sortDesc:
+                              prev.processes.sortBy === "network"
+                                ? !prev.processes.sortDesc
+                                : true,
+                          },
+                        }))
+                      }
+                    >
+                      {m.colNetwork}
+                      {state.processes.sortBy === "network" &&
+                        (state.processes.sortDesc ? (
+                          <ArrowDown className="size-3" />
+                        ) : (
+                          <ArrowUp className="size-3" />
+                        ))}
+                    </button>
+                  </th>
+                  <th className="w-44 px-3 py-1.5 font-medium">{m.colProjectWorkspace}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -1288,14 +1780,14 @@ export function ProModeWorkspace({
                           </div>
                         </td>
                         <td
-                          className={`px-2.5 py-1.5 text-right font-mono tabular-nums ${
+                          className={`px-2 py-1.5 text-right font-mono tabular-nums ${
                             selected ? "text-selected-foreground/90" : "text-muted-foreground"
                           }`}
                         >
                           {item.pid}
                         </td>
                         <td
-                          className={`px-2.5 py-1.5 text-right font-mono tabular-nums ${
+                          className={`px-2 py-1.5 text-right font-mono tabular-nums ${
                             selected ? "text-selected-foreground/90" : "text-muted-foreground"
                           }`}
                         >
@@ -1306,11 +1798,29 @@ export function ProModeWorkspace({
                               : "--"}
                         </td>
                         <td
-                          className={`px-2.5 py-1.5 text-right font-mono tabular-nums ${
+                          className={`px-2 py-1.5 text-right font-mono tabular-nums ${
                             selected ? "text-selected-foreground/90" : "text-muted-foreground"
                           }`}
                         >
                           {formatMemory(item.memoryBytes)}
+                        </td>
+                        <td
+                          className={`px-2 py-1.5 text-right font-mono tabular-nums ${
+                            selected ? "text-selected-foreground/90" : "text-muted-foreground"
+                          }`}
+                        >
+                          {item.gpuSampling
+                            ? m.cpuSampling
+                            : item.gpuPercent != null
+                              ? `${item.gpuPercent.toFixed(1)}%`
+                              : "--"}
+                        </td>
+                        <td
+                          className={`px-2 py-1.5 text-right font-mono tabular-nums ${
+                            selected ? "text-selected-foreground/90" : "text-muted-foreground"
+                          }`}
+                        >
+                          {formatNetworkRate(item.networkBytesPerSec, item.networkSampling, m)}
                         </td>
                         <td className="px-3 py-1.5">
                           {renderProjectCell(
@@ -1392,7 +1902,7 @@ export function ProModeWorkspace({
                         </div>
                       </td>
                       <td
-                        className={`px-2.5 py-1.5 text-right font-mono tabular-nums ${
+                        className={`px-2 py-1.5 text-right font-mono tabular-nums ${
                           groupRowSelected
                             ? "text-selected-foreground/75"
                             : "text-muted-foreground"
@@ -1401,7 +1911,7 @@ export function ProModeWorkspace({
                         --
                       </td>
                       <td
-                        className={`px-2.5 py-1.5 text-right font-mono tabular-nums ${
+                        className={`px-2 py-1.5 text-right font-mono tabular-nums ${
                           groupRowSelected
                             ? "text-selected-foreground/90"
                             : "text-muted-foreground"
@@ -1414,13 +1924,35 @@ export function ProModeWorkspace({
                             : "--"}
                       </td>
                       <td
-                        className={`px-2.5 py-1.5 text-right font-mono tabular-nums ${
+                        className={`px-2 py-1.5 text-right font-mono tabular-nums ${
                           groupRowSelected
                             ? "text-selected-foreground/90"
                             : "text-muted-foreground"
                         }`}
                       >
                         {formatMemory(group.totalMemory)}
+                      </td>
+                      <td
+                        className={`px-2 py-1.5 text-right font-mono tabular-nums ${
+                          groupRowSelected
+                            ? "text-selected-foreground/90"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {group.gpuSampling
+                          ? m.cpuSampling
+                          : group.totalGpu != null
+                            ? `${group.totalGpu.toFixed(1)}%`
+                            : "--"}
+                      </td>
+                      <td
+                        className={`px-2 py-1.5 text-right font-mono tabular-nums ${
+                          groupRowSelected
+                            ? "text-selected-foreground/90"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {formatNetworkRate(group.totalNetwork, group.networkSampling, m)}
                       </td>
                       <td className="px-3 py-1.5">
                         {renderProjectCell(
@@ -1477,7 +2009,7 @@ export function ProModeWorkspace({
                           </div>
                         </td>
                         <td
-                          className={`px-2.5 py-1 text-right font-mono tabular-nums ${
+                          className={`px-2 py-1 text-right font-mono tabular-nums ${
                             childSelected
                               ? "text-selected-foreground/90"
                               : "text-muted-foreground"
@@ -1486,7 +2018,7 @@ export function ProModeWorkspace({
                           {item.pid}
                         </td>
                         <td
-                          className={`px-2.5 py-1 text-right font-mono tabular-nums ${
+                          className={`px-2 py-1 text-right font-mono tabular-nums ${
                             childSelected
                               ? "text-selected-foreground/90"
                               : "text-muted-foreground"
@@ -1499,13 +2031,35 @@ export function ProModeWorkspace({
                               : "--"}
                         </td>
                         <td
-                          className={`px-2.5 py-1 text-right font-mono tabular-nums ${
+                          className={`px-2 py-1 text-right font-mono tabular-nums ${
                             childSelected
                               ? "text-selected-foreground/90"
                               : "text-muted-foreground"
                           }`}
                         >
                           {formatMemory(item.memoryBytes)}
+                        </td>
+                        <td
+                          className={`px-2 py-1 text-right font-mono tabular-nums ${
+                            childSelected
+                              ? "text-selected-foreground/90"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {item.gpuSampling
+                            ? m.cpuSampling
+                            : item.gpuPercent != null
+                              ? `${item.gpuPercent.toFixed(1)}%`
+                              : "--"}
+                        </td>
+                        <td
+                          className={`px-2 py-1 text-right font-mono tabular-nums ${
+                            childSelected
+                              ? "text-selected-foreground/90"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {formatNetworkRate(item.networkBytesPerSec, item.networkSampling, m)}
                         </td>
                         <td className="px-3 py-1">
                           {renderProjectCell(
@@ -1523,7 +2077,7 @@ export function ProModeWorkspace({
                 })}
                 {filteredProcesses.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                       {m.noProcessesMatch}
                     </td>
                   </tr>
@@ -1763,7 +2317,7 @@ export function ProModeWorkspace({
             </div>
           )}
 
-          {state.subview === "processes" && selectedProcess && (
+          {(state.subview === "home" || state.subview === "processes") && selectedProcess && (
             <div className="space-y-4">
               <div className="space-y-2 border-b border-border pb-3">
                 <div className="flex items-start justify-between gap-2">
@@ -1771,7 +2325,7 @@ export function ProModeWorkspace({
                     <ProcessIcon
                       name={selectedProcess.name}
                       displayName={selectedProcess.displayName}
-                      icon={selectedProcess.icon}
+                      icon={selectedProcess.icon || selectedGroup?.icon}
                       size="md"
                     />
                     <div className="min-w-0">
@@ -1805,6 +2359,87 @@ export function ProModeWorkspace({
                   <span>{m.running}</span>
                 </div>
               </div>
+
+              {(() => {
+                const useGroupTotals = Boolean(
+                  selectedGroup &&
+                    selectedGroup.items.length > 1 &&
+                    (state.subview === "home" || !expandedGroups[selectedGroup.key]),
+                );
+                const cpuVal = useGroupTotals
+                  ? selectedGroup!.cpuSampling
+                    ? m.cpuSampling
+                    : selectedGroup!.totalCpu != null
+                      ? `${selectedGroup!.totalCpu.toFixed(1)}%`
+                      : "--"
+                  : selectedProcess.cpuSampling
+                    ? m.cpuSampling
+                    : selectedProcess.cpuPercent != null
+                      ? `${selectedProcess.cpuPercent.toFixed(1)}%`
+                      : "--";
+                const memVal = formatMemory(
+                  useGroupTotals ? selectedGroup!.totalMemory : selectedProcess.memoryBytes,
+                );
+                const gpuSampling = useGroupTotals
+                  ? selectedGroup!.gpuSampling
+                  : selectedProcess.gpuSampling;
+                const gpuPct = useGroupTotals
+                  ? selectedGroup!.totalGpu
+                  : selectedProcess.gpuPercent;
+                const gpuMem = useGroupTotals
+                  ? selectedGroup!.totalGpuMemory
+                  : selectedProcess.gpuMemoryBytes ?? 0;
+                const gpuVal = gpuSampling
+                  ? m.cpuSampling
+                  : gpuPct != null
+                    ? `${gpuPct.toFixed(1)}%`
+                    : "--";
+                const netRate = useGroupTotals
+                  ? selectedGroup!.totalNetwork
+                  : selectedProcess.networkBytesPerSec;
+                const netSampling = useGroupTotals
+                  ? selectedGroup!.networkSampling
+                  : selectedProcess.networkSampling;
+                const netConns = useGroupTotals
+                  ? selectedGroup!.totalNetworkConnections
+                  : selectedProcess.networkConnections ?? 0;
+                const netVal = formatNetworkRate(netRate, netSampling, m);
+
+                return (
+                  <div className="grid grid-cols-2 gap-px border border-border bg-border text-xs">
+                    <div className="bg-surface-sunken/50 px-2.5 py-2">
+                      <div className="text-[11px] text-muted-foreground">{m.colCpu}</div>
+                      <div className="mt-0.5 font-mono font-semibold tabular-nums">{cpuVal}</div>
+                    </div>
+                    <div className="bg-surface-sunken/50 px-2.5 py-2">
+                      <div className="text-[11px] text-muted-foreground">{m.colMemory}</div>
+                      <div className="mt-0.5 font-mono font-semibold tabular-nums">{memVal}</div>
+                    </div>
+                    <div className="bg-surface-sunken/50 px-2.5 py-2">
+                      <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+                        <span>{m.colGpu}</span>
+                        {gpuMem > 0 && (
+                          <span className="font-mono text-[10px] tabular-nums">
+                            {m.gpuMemoryLabel} {formatMemory(gpuMem)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 font-mono font-semibold tabular-nums">{gpuVal}</div>
+                    </div>
+                    <div className="bg-surface-sunken/50 px-2.5 py-2">
+                      <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+                        <span>{m.colNetwork}</span>
+                        {netConns > 0 && (
+                          <span className="font-mono text-[10px] tabular-nums">
+                            {netConns} {m.networkConnectionsUnit}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 font-mono font-semibold tabular-nums">{netVal}</div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <dl className="space-y-2">
                 {selectedProcess.runId && (
@@ -1900,7 +2535,7 @@ export function ProModeWorkspace({
                     className="h-8 text-xs"
                     onClick={() =>
                       onOpenRun(selectedProcess.runId!, {
-                        subview: "processes",
+                        subview: state.subview,
                         label: `${selectedProcess.name} (PID ${selectedProcess.pid})`,
                         runId: selectedProcess.runId!,
                         runTitle: selectedProcess.commandTitle || selectedProcess.name,
@@ -2245,7 +2880,7 @@ export function ProModeWorkspace({
             </div>
           )}
 
-          {((state.subview === "processes" && !selectedProcess) ||
+          {(((state.subview === "home" || state.subview === "processes") && !selectedProcess) ||
             (state.subview === "ports" && !selectedPort) ||
             (state.subview === "files" && !selectedFileHandle)) && (
             <div className="flex flex-1 items-center justify-center text-muted-foreground">

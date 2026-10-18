@@ -7,13 +7,14 @@
   }
 }
 @keyframes yourun-dialog-in {
+  /* Tailwind's translate utilities already center the dialog. */
   from {
     opacity: 0;
-    transform: translate(-50%, calc(-50% + 4px)) scale(0.985);
+    transform: translateY(4px) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: none;
   }
 }
 .yourun-dialog-overlay[data-state="open"] {

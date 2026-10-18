@@ -190,7 +190,9 @@ export function RunOutput({
                 ? m.returnToPortAndRecheck
                 : resourceOrigin.subview === "files"
                   ? m.returnToFileAndRecheck
-                  : m.returnToProcessAndRecheck}
+                  : resourceOrigin.subview === "home"
+                    ? m.returnToHomeAndRecheck
+                    : m.returnToProcessAndRecheck}
             </Button>
           )}
         </div>
