@@ -563,7 +563,6 @@ export function GlobalSettings({
           />
         </SettingsRow>
         {startup && <SettingsRow label={m.startupAtLogin}>{startup}</SettingsRow>}
-        {agentIntegration && <SettingsRow label={m.agentIntegration}>{agentIntegration}</SettingsRow>}
         {onUpdates && <div className="py-1">
           <Button
             variant="ghost"
@@ -580,6 +579,7 @@ export function GlobalSettings({
         </div>}
       </div>
       <div className="divide-y divide-border border-t border-border">
+        {agentIntegration}
         <SettingsSection
           stateKey="projects-section"
           title={m.projects}

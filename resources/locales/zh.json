@@ -46,6 +46,8 @@
   "agentIntegration": "AI Agent 接入",
   "agentIntegrationOn": "已开启",
   "agentIntegrationOff": "已关闭",
+  "agentIntegrationRevoke": "撤销",
+  "agentIntegrationRevokeAll": "全部撤销",
   "agentIntegrationLoadFailed": "无法读取 AI Agent 接入设置",
   "agentIntegrationSaveFailed": "无法保存 AI Agent 接入设置",
   "agentIntegrationDevelopment": "请使用便携构建开启 AI Agent 接入",

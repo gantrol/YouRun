@@ -46,6 +46,8 @@
   "agentIntegration": "AI Agent integration",
   "agentIntegrationOn": "On",
   "agentIntegrationOff": "Off",
+  "agentIntegrationRevoke": "Revoke",
+  "agentIntegrationRevokeAll": "Revoke all",
   "agentIntegrationLoadFailed": "Could not read AI Agent integration settings",
   "agentIntegrationSaveFailed": "Could not save AI Agent integration settings",
   "agentIntegrationDevelopment": "Use a portable build to enable AI Agent integration",

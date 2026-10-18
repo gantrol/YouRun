@@ -83,27 +83,59 @@ func (a *app) loadAgentIntegration() {
 	}()
 }
 
-func (a *app) agentIntegrationSetting(c *ui.Context) {
-	enabled := a.agentIntegration.Enabled
-	if a.checkbox(c.Key("agent-integration"), &enabled, a.m("agentIntegration")).
-		Disabled(a.busy || a.candidate || a.host.UpdatePending() || a.loadingAgentIntegration || a.savingAgentIntegration || !a.agentIntegrationLoaded || !a.agentIntegration.Supported).Changed() {
-		a.savingAgentIntegration, a.agentIntegrationError = true, ""
-		a.work(func() (func(), error) {
-			var next desktop.AgentIntegrationSettings
-			err := a.api.request("PUT", "agent-integration", map[string]bool{"enabled": enabled}, &next)
-			loaded := err == nil
-			if err != nil {
-				loaded = a.api.request("GET", "agent-integration", nil, &next) == nil
+func (a *app) mutateAgentIntegration(targets []string, enabled bool) {
+	a.savingAgentIntegration, a.agentIntegrationError = true, ""
+	a.work(func() (func(), error) {
+		var next desktop.AgentIntegrationSettings
+		err := a.api.request("PUT", "agent-integration", map[string]any{
+			"enabled": enabled,
+			"targets": targets,
+		}, &next)
+		loaded := err == nil
+		if err != nil {
+			loaded = a.api.request("GET", "agent-integration", nil, &next) == nil
+		}
+		return func() {
+			a.savingAgentIntegration, a.agentIntegrationLoaded = false, loaded
+			if loaded {
+				a.agentIntegration = next
 			}
-			return func() {
-				a.savingAgentIntegration, a.agentIntegrationLoaded = false, loaded
-				if loaded {
-					a.agentIntegration = next
+			if err != nil {
+				a.agentIntegrationError = err.Error()
+			}
+		}, nil
+	})
+}
+
+func (a *app) agentIntegrationSetting(c *ui.Context) {
+	disabled := a.busy || a.candidate || a.host.UpdatePending() || a.loadingAgentIntegration || a.savingAgentIntegration || !a.agentIntegrationLoaded
+	configuredCount := 0
+	for _, t := range a.agentIntegration.Targets {
+		if t.Configured {
+			configuredCount++
+		}
+	}
+	ui.Row(c).Gap(8).Wrap().Children(func() {
+		ui.Text(c, a.m("agentIntegration")).Bold()
+		if configuredCount > 0 {
+			if a.button(c.Key("agent-integration-revoke-all"), a.m("agentIntegrationRevokeAll")).Disabled(disabled).Clicked() {
+				a.mutateAgentIntegration([]string{"all"}, false)
+			}
+		}
+	})
+	for _, target := range a.agentIntegration.Targets {
+		t := target
+		checked := t.Configured
+		ui.Row(c.Key("agent-target-" + t.ID)).Gap(8).Wrap().Children(func() {
+			if a.checkbox(c.Key("chk-"+t.ID), &checked, t.Name).
+				Disabled(disabled || (!t.Configured && !a.agentIntegration.Supported)).Changed() {
+				a.mutateAgentIntegration([]string{t.ID}, checked)
+			}
+			if t.Configured {
+				if a.button(c.Key("revoke-"+t.ID), a.m("agentIntegrationRevoke")).Disabled(disabled).Clicked() {
+					a.mutateAgentIntegration([]string{t.ID}, false)
 				}
-				if err != nil {
-					a.agentIntegrationError = err.Error()
-				}
-			}, nil
+			}
 		})
 	}
 	if a.loadingAgentIntegration {
