@@ -40,6 +40,7 @@ type Host struct {
 	projectOpenersAt    time.Time
 	pickerMu            sync.RWMutex
 	chooseDirectory     func() (string, error)
+	chooseFile          func() (string, error)
 	chooseProjectAvatar func() (string, error)
 	windowMu            sync.RWMutex
 	windowState         func() WindowState
@@ -145,6 +146,30 @@ func New(framework string, frontend fs.FS) (*Host, error) {
 		}
 		if r.URL.Path == "/api/project-metadata" {
 			host.serveProjectMetadata(w, r)
+			return
+		}
+		if r.URL.Path == "/api/project-workspaces" {
+			host.serveProjectWorkspaces(w, r)
+			return
+		}
+		if r.URL.Path == "/api/source-inspect" {
+			host.serveSourceInspect(w, r)
+			return
+		}
+		if r.URL.Path == "/api/resources/processes" {
+			host.serveResourcesProcesses(w, r)
+			return
+		}
+		if r.URL.Path == "/api/resources/ports" {
+			host.serveResourcesPorts(w, r)
+			return
+		}
+		if r.URL.Path == "/api/resources/files" {
+			host.serveResourcesFiles(w, r)
+			return
+		}
+		if r.URL.Path == "/api/choose-file" {
+			host.serveChooseFile(w, r)
 			return
 		}
 		if r.URL.Path == "/api/project-settings" {

@@ -50,6 +50,17 @@ import { QuitDialog, useQuitDialog } from "./quit-dialog";
 import { CustomProjectOpenerDialog, useProjectOpeners } from "./project-openers";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 import { ViewStateProvider } from "@/renderer/components/ui/view-state";
+import {
+  ProModeWorkspace,
+  createInitialProModeState,
+  type ProModeState,
+  type ResourceOriginContext,
+} from "./pro-mode";
+import {
+  isSubOrSamePath,
+  resolveCommandWorkspaceDirectory,
+  samePathNormalized,
+} from "./project-workspaces";
 
 export function App({
   initial,
@@ -94,6 +105,10 @@ export function App({
   const [collectionDialog, setCollectionDialog] = useState<CollectionDialogTarget>();
   const [customEditorProject, setCustomEditorProject] = useState<string>();
   const [menuStatus, setMenuStatus] = useState("");
+  const [appMode, setAppMode] = useState<"launch" | "pro">("launch");
+  const [proState, setProState] = useState<ProModeState>(createInitialProModeState);
+  const [proRecheckTrigger, setProRecheckTrigger] = useState(0);
+  const [runResourceOrigin, setRunResourceOrigin] = useState<ResourceOriginContext>();
   useEffect(() => {
     if (!menuStatus) return;
     const timeout = setTimeout(() => setMenuStatus(""), 3000);
@@ -343,8 +358,8 @@ export function App({
 
   useEffect(() => {
     document.documentElement.lang = locale;
-    document.title = m.title;
-  }, [locale, m.title]);
+    document.title = appMode === "pro" ? "iRun" : m.title;
+  }, [locale, m.title, appMode]);
   useEffect(() => {
     const guard = (event: BeforeUnloadEvent) => {
       if (!allowUnload.current && (dirty || saving || saveError || appearance.saving || formSaving || choosingImport)) {
@@ -473,9 +488,28 @@ export function App({
     }
     setDirty(false);
     setLeaving(false);
+    const returningFromProRun =
+      panel?.kind === "run" &&
+      runResourceOrigin &&
+      panel.id === runResourceOrigin.runId;
     restorePanelScroll.current = panelScrolls.current.pop() ?? 0;
     setPanels((previous) => previous.slice(0, -1));
     const trigger = triggers.current.pop();
+    if (returningFromProRun) {
+      const origin = runResourceOrigin;
+      const stopped =
+        selectedRun &&
+        selectedRun.status !== "running" &&
+        selectedRun.status !== "stopping";
+      setProState((prev) => ({
+        ...prev,
+        subview: origin.subview,
+        origin: stopped ? { ...origin, reviewStatus: "stale" } : undefined,
+      }));
+      setRunResourceOrigin(undefined);
+      setAppMode("pro");
+      return;
+    }
     restoreNavigationFocus(trigger, panels.length > 1);
   }
   function restoreNavigationFocus(trigger: HTMLElement | null | undefined, hasPanel: boolean) {
@@ -628,16 +662,20 @@ export function App({
     }).catch((cause) => setIssue(cause instanceof Error ? cause.message : "storageFailed"));
   }
   function quickRun(command: Command, origin: boolean | "home" | "project" = false) {
+    const projectWs = command.project ? projectDetails.details[command.project]?.workspaces : undefined;
+    const activeWsId = command.project ? projectDetails.details[command.project]?.activeWorkspace : undefined;
+    const resolvedDir = resolveCommandWorkspaceDirectory(command, projectWs, activeWsId);
+    const directory = directories[command.id] ?? resolvedDir;
     const active = runs.find(
       (run) =>
         run.commandId === command.id &&
-        ["running", "stopping"].includes(run.status),
+        ["running", "stopping"].includes(run.status) &&
+        (!projectWs || projectWs.length <= 1 || samePathNormalized(run.directory, directory)),
     );
     if (active) {
       open({ kind: "run", id: active.id }, origin);
       return;
     }
-    const directory = directories[command.id] ?? command.directory;
     if (
       active ||
       command.fields.length ||
@@ -674,6 +712,10 @@ export function App({
   };
   function openProjectDirectory(id: string, opener?: string) {
     void api("open-project-directory", "POST", { id, opener }).catch((cause) =>
+      setIssue(cause instanceof Error ? cause.message : "projectOpenFailed"));
+  }
+  function openDirectoryPath(directory: string) {
+    void api("open-project-directory", "POST", { directory }).catch((cause) =>
       setIssue(cause instanceof Error ? cause.message : "projectOpenFailed"));
   }
   function copy(text: string) {
@@ -776,13 +818,16 @@ export function App({
       )}
       <div className="flex h-full flex-col" inert={switching || preparingQuit}>
         <TitleBar
-          title={panel ? title : m.productName}
+          title={appMode === "pro" ? "iRun" : panel ? title : m.productName}
           m={m}
-          onBack={panel ? () => back() : undefined}
+          onBack={appMode === "pro" ? undefined : panel ? () => back() : undefined}
           backDisabled={formSaving || choosingImport}
           headingRef={headingRef}
           mac={windowControls.platform === "darwin"}
           fullscreen={windowControls.fullscreen}
+          mode={appMode}
+          modeDisabled={formSaving || choosingImport || dirty}
+          onModeChange={(nextMode) => setAppMode(nextMode)}
           controls={
             windowControls.platform !== "darwin" ? (
               <WindowControls
@@ -841,7 +886,40 @@ export function App({
             {m[menuStatus as keyof Messages] ?? m.requestFailed}
           </div>
         )}
-        <ViewStateProvider scope={pageKey}>
+        <ViewStateProvider scope={appMode === "pro" ? `pro:${proState.subview}` : pageKey}>
+        {appMode === "pro" ? (
+          <ProModeWorkspace
+            state={proState}
+            onStateChange={setProState}
+            projects={projects}
+            projectDetails={projectDetails.details}
+            runs={runs}
+            commands={commands}
+            locale={locale}
+            m={m}
+            recheckTrigger={proRecheckTrigger}
+            onOpenRun={(runId, origin) => {
+              if (origin) {
+                setRunResourceOrigin(origin);
+                setProState((prev) => ({ ...prev, origin }));
+              }
+              setAppMode("launch");
+              open({ kind: "run", id: runId }, "home");
+            }}
+            onOpenWorkspace={(projectId, workspaceId) => {
+              if (workspaceId) {
+                void projectDetails.mutateWorkspaces(projectId, {
+                  action: "select",
+                  locationId: workspaceId,
+                });
+              }
+              setAppMode("launch");
+              open({ kind: "projectCommands", id: projectId }, "home");
+            }}
+            onCopy={copy}
+            onOpenDirectoryPath={openDirectoryPath}
+          />
+        ) : (
         <WorkspaceFrame className="workspace-rewrite" data-project={!!contextProject || !!contextCollection} data-leaf={leaf} data-panel={!!panel} inert={formSaving || choosingImport}>
           <WorkspaceOverview className="workspace-home" hasDetail={!!panel} split={detailPanel}>
             <div
@@ -917,6 +995,17 @@ export function App({
           {panel?.kind === "collectionCommands" && !contextCollection && <div className="flex-1 p-5" role="status">{m.collectionMissing}</div>}
           {contextProject && <ProjectCommands key={contextProject.id} project={contextProject} commands={commands} directories={directories} runs={runs} m={m}
             searchRef={projectSearchRef}
+            workspaces={projectDetails.details[contextProject.id]?.workspaces}
+            activeWorkspaceId={projectDetails.details[contextProject.id]?.activeWorkspace}
+            onMutateWorkspaces={(payload) => projectDetails.mutateWorkspaces(contextProject.id, payload)}
+            onOpenPortForRun={(run) => {
+              setProState((prev) => ({
+                ...prev,
+                subview: "ports",
+                ports: { ...prev.ports, query: run.values?.port || "" },
+              }));
+              setAppMode("pro");
+            }}
             menus={launcherMenus} runOperations={runOperations} launchErrors={launchErrors}
             selectedId={selected?.id ?? editing?.id ?? selectedRun?.commandId} revealId={!leaf ? revealCommand : undefined}
             onRevealed={() => setRevealCommand(undefined)} initialOffset={projectScrolls.current[contextProject.id] ?? 0}
@@ -986,7 +1075,14 @@ export function App({
                   launchError={launchErrors[selected.id]}
                   onEdit={() => open({ kind: "editCommand", id: selected.id })}
                   m={m}
-                  directory={directories[selected.id] ?? selected.directory}
+                  directory={
+                    directories[selected.id] ??
+                    resolveCommandWorkspaceDirectory(
+                      selected,
+                      selected.project ? projectDetails.details[selected.project]?.workspaces : undefined,
+                      selected.project ? projectDetails.details[selected.project]?.activeWorkspace : undefined,
+                    )
+                  }
                   values={inputs[selected.id] ?? {}}
                   runs={runs.filter((run) => run.commandId === selected.id)}
                   initialRunId={
@@ -1020,8 +1116,9 @@ export function App({
                 ))}
                 <ProjectEditor
                   key={project.id} project={project} deleted={!savedProject} platform={initial.platform} directory={projectDetails.details[project.id]?.directory}
-                  commands={commands.filter(command => command.project === project.id)} m={m} onChange={updateProject} metadata={null}
+                  commands={commands.filter(command => command.project === project.id)} runs={runs} m={m} onChange={updateProject} metadata={null}
                   details={projectDetails.details[project.id]} busy={projectDetails.busy(project.id)} error={projectDetails.errors[project.id]}
+                  onMutateWorkspaces={(payload) => projectDetails.mutateWorkspaces(project.id, payload)}
                   onDirty={setDirty} onBusy={setFormSaving} onCancel={() => back()}
                   onSave={(base, next, logo) => submit(async () => {
                     await flush();
@@ -1141,6 +1238,50 @@ export function App({
                   onStop={stopRun}
                   onReplay={replayRun}
                   onRecheck={refreshWorkspace}
+                  resourceOrigin={runResourceOrigin?.runId === selectedRun.id ? runResourceOrigin : undefined}
+                  onReturnAndRecheck={
+                    runResourceOrigin?.runId === selectedRun.id
+                      ? () => {
+                          const origin = runResourceOrigin;
+                          setProState((prev) => ({
+                            ...prev,
+                            subview: origin.subview,
+                            origin: { ...origin, reviewStatus: "released" },
+                          }));
+                          setProRecheckTrigger((c) => c + 1);
+                          setRunResourceOrigin(undefined);
+                          restorePanelScroll.current = panelScrolls.current.pop() ?? 0;
+                          setPanels((previous) => previous.slice(0, -1));
+                          triggers.current.pop();
+                          setAppMode("pro");
+                        }
+                      : undefined
+                  }
+                  onViewWorkspace={
+                    (() => {
+                      const runProjectId = commands.find((c) => c.id === selectedRun.commandId)?.project;
+                      if (!runProjectId) return undefined;
+                      return () => {
+                        const wsList = projectDetails.details[runProjectId]?.workspaces;
+                        const matchedWs = wsList?.find((w) => isSubOrSamePath(w.directory, selectedRun.directory));
+                        if (matchedWs) {
+                          void projectDetails.mutateWorkspaces(runProjectId, {
+                            action: "select",
+                            locationId: matchedWs.id,
+                          });
+                        }
+                        open({ kind: "projectCommands", id: runProjectId }, "home");
+                      };
+                    })()
+                  }
+                  onViewPorts={() => {
+                    setProState((prev) => ({
+                      ...prev,
+                      subview: "ports",
+                      ports: { ...prev.ports, query: selectedRun.values?.port || "" },
+                    }));
+                    setAppMode("pro");
+                  }}
                 /></div>
               )}
               {panel.kind === "history" && (
@@ -1158,6 +1299,7 @@ export function App({
             </WorkspaceDetail>
           )}
         </WorkspaceFrame>
+        )}
         </ViewStateProvider>
         <span className="sr-only" role="status">
           {runs[0] ? `${runs[0].title} · ${m[runs[0].status]}` : ""}

@@ -40,6 +40,9 @@ type cliExit struct{ code int }
 
 func (e *cliExit) Error() string { return "command failed" }
 
+// ResourceHandler allows the desktop package to attach OS resource queries to the CLI.
+var ResourceHandler func(ctx context.Context, mode string, dataDir string, ws *workspace.Service, targetPath string, recursive bool) (any, error)
+
 func run(args []string) error {
 	mode := "status"
 	if len(args) > 0 {
@@ -60,7 +63,10 @@ Desktop: no arguments open the window; cli without a subcommand returns status.
   logs       --id ID [--cursor BYTES] [--limit BYTES]; text and lossless base64 data
   wait       --id ID [--timeout 30s]; waiting never owns or cancels the command
   activity   Counts of active and unknown executions
-  discover / inspect [--directory PATH]
+  processes  Inspect active processes and YouRun attribution
+  ports      Inspect active local TCP/UDP ports and YouRun attribution
+  files      Inspect processes holding a file or directory --directory PATH [--recursive]
+  discover / inspect / source [--directory PATH]
 All commands accept --data PATH. Launch commands execute only saved definitions.
 Exit codes: 0 success/accepted, 1 failed/stopped task, 2 request error,
 3 unknown execution outcome, 124 wait timeout. Responses are JSON.
@@ -68,7 +74,7 @@ No GUI, resident service, connection approval, or interactive stdin is required.
 		return nil
 	}
 	switch mode {
-	case "_execute", "discover", "inspect", "wait", "status", "list", "search", "activity", "stop-all", "logs", "restart", "replay", "run", "dev", "start", "stop":
+	case "_execute", "discover", "inspect", "source", "processes", "ports", "files", "wait", "status", "list", "search", "activity", "stop-all", "logs", "restart", "replay", "run", "dev", "start", "stop":
 	default:
 		return fmt.Errorf("unknown command %q", mode)
 	}
@@ -91,6 +97,7 @@ No GUI, resident service, connection approval, or interactive stdin is required.
 	query := flags.String("query", "", "Search query for search or list")
 	projectFilter := flags.String("project", "", "Filter or select by project ID or name")
 	showHidden := flags.Bool("hidden", false, "Include hidden projects and commands in search")
+	recursive := flags.Bool("recursive", false, "Include subdirectories when querying files")
 	if err = flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -110,7 +117,7 @@ No GUI, resident service, connection approval, or interactive stdin is required.
 	if mode == "_execute" {
 		return engine.ExecuteRun(*dir, *id)
 	}
-	if mode == "discover" || mode == "inspect" {
+	if mode == "discover" || mode == "inspect" || mode == "source" {
 		targetDir := strings.TrimSpace(*project)
 		if targetDir == "" {
 			targetDir, err = os.Getwd()
@@ -122,6 +129,9 @@ No GUI, resident service, connection approval, or interactive stdin is required.
 			if err != nil {
 				return errors.New("invalidDirectory")
 			}
+		}
+		if mode == "source" {
+			return json.NewEncoder(os.Stdout).Encode(engine.InspectSource(context.Background(), targetDir, "", "", true))
 		}
 		rules, rulesErr := discovery.LoadRegistry(filepath.Join(*dir, "discovery-rules"))
 		if rulesErr != nil {
@@ -209,6 +219,16 @@ No GUI, resident service, connection approval, or interactive stdin is required.
 	}
 	if mode == "search" {
 		return searchWorkspace(service, *query, *projectFilter, *showHidden)
+	}
+	if mode == "processes" || mode == "ports" || mode == "files" {
+		if ResourceHandler == nil {
+			return fmt.Errorf("resource handler unavailable")
+		}
+		res, resErr := ResourceHandler(context.Background(), mode, *dir, service, *project, *recursive)
+		if resErr != nil {
+			return resErr
+		}
+		return json.NewEncoder(os.Stdout).Encode(res)
 	}
 
 	method, path := "GET", "/api/state"

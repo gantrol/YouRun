@@ -13,6 +13,7 @@ func replaceFile(from, to string) error          { return os.Rename(from, to) }
 func openSnapshot(path string) (*os.File, error) { return os.Open(path) }
 func prepareDetached(cmd *exec.Cmd)              { cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} }
 func prepareChild(cmd *exec.Cmd)                 { cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} }
+func prepareHidden(cmd *exec.Cmd)                {}
 
 type processGroup struct{ pid int }
 

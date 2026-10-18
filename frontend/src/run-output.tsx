@@ -1,14 +1,16 @@
-import { LoaderCircle, Pencil, Play, RotateCw, Square } from "lucide-react";
+import { ArrowLeft, GitBranch, LoaderCircle, Pencil, Play, RotateCw, Square } from "lucide-react";
 import { displayedRunState, type RunOperation } from "./models/run-operation";
 import { Button } from "@/renderer/components/ui/button";
 import { RunStatus } from "./run-state";
-import type { Run } from "./model";
+import type { Run, SourceSnapshot } from "./model";
 import type { Messages } from "./messages";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { streamAPI } from "./api";
+import { api, streamAPI } from "./api";
 import { CommandFailure } from "./command-failure";
 import { useViewPosition } from "@/renderer/components/ui/view-state";
 import { Disclosure } from "@/renderer/components/ui/disclosure";
+import { formatSourceSummary } from "./project-workspaces";
+import type { ResourceOriginContext } from "./pro-mode";
 
 export function RunOutput({
   run,
@@ -20,6 +22,10 @@ export function RunOutput({
   operation,
   launchError,
   showEditAction = true,
+  resourceOrigin,
+  onReturnAndRecheck,
+  onViewWorkspace,
+  onViewPorts,
 }: {
   run: Run;
   m: Messages;
@@ -30,6 +36,10 @@ export function RunOutput({
   operation?: RunOperation;
   launchError?: string;
   showEditAction?: boolean;
+  resourceOrigin?: ResourceOriginContext;
+  onReturnAndRecheck?: () => void;
+  onViewWorkspace?: () => void;
+  onViewPorts?: () => void;
 }) {
   const [localOperation, setLocalOperation] = useState<RunOperation>();
   const ownOperation = operation?.runId === run.id ? operation : localOperation?.runId === run.id ? localOperation : undefined;
@@ -42,10 +52,47 @@ export function RunOutput({
   const [output, setOutput] = useState("");
   const [issue, setIssue] = useState("");
   const [truncated, setTruncated] = useState(false);
+  const [currentSource, setCurrentSource] = useState<SourceSnapshot | null>(null);
   const logRef = useRef<HTMLPreElement>(null);
   const following = useRef(true);
   const position = useViewPosition(`run:${run.id}:output`);
   const restoring = useRef<number | undefined>(position.read());
+
+  useEffect(() => {
+    let cancelled = false;
+    setCurrentSource(null);
+    if (!run.launchSource || !run.directory) return;
+    void api<SourceSnapshot>("source-inspect", "POST", { directory: run.directory })
+      .then((snap) => {
+        if (!cancelled) setCurrentSource(snap);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [run.id, run.directory, run.status, run.launchSource]);
+
+  const sourceComparison = (() => {
+    const launch = run.launchSource;
+    if (!launch) return null;
+    const current = currentSource;
+    if (current?.inaccessible || launch.inaccessible) {
+      return { status: "inaccessible" as const, label: m.dirInaccessible };
+    }
+    if (launch.nonGit || current?.nonGit || (!launch.commit && !launch.branch)) {
+      return { status: "unrecorded" as const, label: m.sourceUnrecorded };
+    }
+    if (
+      current &&
+      (launch.commit !== current.commit ||
+        launch.branch !== current.branch ||
+        !!launch.dirty !== !!current.dirty)
+    ) {
+      return { status: "changed" as const, label: m.codeChanged };
+    }
+    return { status: "consistent" as const, label: m.codeConsistent };
+  })();
+
   useLayoutEffect(() => {
     const element = logRef.current;
     if (!element) return;
@@ -123,10 +170,76 @@ export function RunOutput({
             try { await onStop(run.id); } finally { setLocalOperation(undefined); }
           }}>
             {stopping ? <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : <Square className="size-4" aria-hidden="true" />}
-            {stopping ? m.stopping : m.stop}
+            {stopping ? m.stopping : resourceOrigin ? m.stopThisRun : m.stop}
           </Button>
         ) : null}</span>}
       </div>
+      {resourceOrigin && run.status !== "running" && !stopping && (
+        <div
+          role="status"
+          className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-border bg-surface-sunken px-3 py-2 text-xs"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-foreground">{m.stoppedResourceUnchecked}</span>
+            <span className="font-mono text-muted-foreground">({resourceOrigin.label})</span>
+          </div>
+          {onReturnAndRecheck && (
+            <Button size="sm" onClick={onReturnAndRecheck}>
+              <ArrowLeft className="size-3.5" aria-hidden="true" />
+              {resourceOrigin.subview === "ports"
+                ? m.returnToPortAndRecheck
+                : resourceOrigin.subview === "files"
+                  ? m.returnToFileAndRecheck
+                  : m.returnToProcessAndRecheck}
+            </Button>
+          )}
+        </div>
+      )}
+      {run.launchSource && sourceComparison && (
+        <div className="mb-3 space-y-1.5 border border-border bg-surface-sunken/50 px-3 py-2 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <GitBranch className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              <span
+                className={
+                  sourceComparison.status === "changed"
+                    ? "border border-warning/40 bg-warning/10 px-1.5 py-0.5 font-medium text-warning-foreground"
+                    : "border border-border bg-background px-1.5 py-0.5 text-muted-foreground"
+                }
+              >
+                {sourceComparison.label}
+              </span>
+              {sourceComparison.status === "changed" && run.status === "running" && (
+                <span className="text-muted-foreground">{m.runningVersionUnconfirmed}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {onViewWorkspace && (
+                <Button variant="ghost" size="xs" onClick={onViewWorkspace}>
+                  {m.viewWorkspace}
+                </Button>
+              )}
+              {onViewPorts && (
+                <Button variant="ghost" size="xs" onClick={onViewPorts}>
+                  {m.viewPorts}
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="grid gap-1 font-mono text-[11px] text-muted-foreground @min-[32rem]/desktop:grid-cols-2">
+            <div className="truncate">
+              <span className="font-sans text-foreground-secondary">{m.launchTimeSource}：</span>
+              {formatSourceSummary(run.launchSource, m)}
+            </div>
+            {currentSource && !currentSource.nonGit && !currentSource.inaccessible && (
+              <div className="truncate">
+                <span className="font-sans text-foreground-secondary">{m.workspaceCurrentSource}：</span>
+                {formatSourceSummary(currentSource, m)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {run.status === "unknown" && <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span role="status">{m.runOutcomeUnknown}</span>
         {onRecheck && <Button variant="outline" size="sm" disabled={checking || pending} aria-busy={checking} onClick={async () => {

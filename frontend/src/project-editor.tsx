@@ -11,13 +11,22 @@ import { ProjectOpenersDropdown } from "./project-openers";
 import { ScanIssues } from "./scan-issues";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 import { useDraftViewModel } from "./viewmodels/use-draft-view-model";
-import type { Project } from "./model";
+import { ProjectWorkspacesManager } from "./project-workspaces";
+import type { Project, Run } from "./model";
 import type { Messages } from "./messages";
 
 export type ProjectLogoDraft = { revision: number; logoId: string; avatar: string };
 type Props = ComponentProps<typeof ProjectSettings> & Pick<ComponentProps<typeof ProjectMetadataControls>,
   "details" | "busy" | "error" | "onDirty" | "onRescan" | "onRetry" | "onOpenDirectory" | "onCopyDirectory" | "openers" | "onOpenWith" | "onCustomEditor"> & {
   deleted?: boolean;
+  runs?: Run[];
+  onMutateWorkspaces?: (payload: {
+    action: "select" | "add" | "rename" | "setDefault" | "remove";
+    locationId?: string;
+    name?: string;
+    directory?: string;
+    chooseDirectory?: boolean;
+  }) => Promise<unknown>;
   onSave: (base: Project, project: Project, logo?: ProjectLogoDraft) => Promise<void>;
   onCancel: () => void;
   onBusy: (value: boolean) => void;
@@ -79,6 +88,16 @@ export function ProjectEditor(props: Props) {
           </div>
           <code className="block break-all text-xs text-muted-foreground">{details?.directory || m.unbound}</code>
         </div>
+        {details?.workspaces && props.onMutateWorkspaces && (
+          <ProjectWorkspacesManager
+            project={project}
+            workspaces={details.workspaces}
+            runs={props.runs ?? []}
+            commands={props.commands}
+            m={m}
+            onMutate={props.onMutateWorkspaces}
+          />
+        )}
       </div>}/>
     </div>
     <FormActions contained error={props.deleted ? m.projectMissing : conflict ? m.conflict : error ? m[error as keyof Messages] ?? m.storageFailed : undefined}>

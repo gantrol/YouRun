@@ -55,21 +55,38 @@ type Definitions struct {
 	Commands    []Command    `json:"commands"`
 	Collections []Collection `json:"collections"`
 }
+type SourceSnapshot struct {
+	WorkspaceID   string `json:"workspaceId,omitempty"`
+	WorkspaceName string `json:"workspaceName,omitempty"`
+	Directory     string `json:"directory"`
+	RepoRoot      string `json:"repoRoot,omitempty"`
+	Branch        string `json:"branch,omitempty"`
+	Commit        string `json:"commit,omitempty"`
+	ShortCommit   string `json:"shortCommit,omitempty"`
+	Tag           string `json:"tag,omitempty"`
+	Detached      bool   `json:"detached,omitempty"`
+	Dirty         bool   `json:"dirty,omitempty"`
+	NonGit        bool   `json:"nonGit,omitempty"`
+	Inaccessible  bool   `json:"inaccessible,omitempty"`
+	ObservedAt    string `json:"observedAt"`
+}
+
 type Run struct {
-	ID         string            `json:"id"`
-	CommandID  string            `json:"commandId"`
-	Title      string            `json:"title"`
-	Text       string            `json:"text"`
-	Template   string            `json:"template,omitempty"`
-	Directory  string            `json:"directory"`
-	Values     map[string]string `json:"values"`
-	Shell      string            `json:"shell"`
-	Time       string            `json:"time"`
-	Status     string            `json:"status"`
-	PID        int               `json:"pid"`
-	ExitCode   *int              `json:"exitCode,omitempty"`
-	Error      string            `json:"error,omitempty"`
-	OmitOutput bool              `json:"omitOutput,omitempty"`
+	ID           string            `json:"id"`
+	CommandID    string            `json:"commandId"`
+	Title        string            `json:"title"`
+	Text         string            `json:"text"`
+	Template     string            `json:"template,omitempty"`
+	Directory    string            `json:"directory"`
+	Values       map[string]string `json:"values"`
+	Shell        string            `json:"shell"`
+	Time         string            `json:"time"`
+	Status       string            `json:"status"`
+	PID          int               `json:"pid"`
+	ExitCode     *int              `json:"exitCode,omitempty"`
+	Error        string            `json:"error,omitempty"`
+	OmitOutput   bool              `json:"omitOutput,omitempty"`
+	LaunchSource *SourceSnapshot   `json:"launchSource,omitempty"`
 }
 type Snapshot struct {
 	RunsRevision     int64             `json:"runsRevision"`
@@ -95,16 +112,18 @@ type RuntimeState struct {
 
 // Execution is an immutable command snapshot supplied by the authenticated host.
 type Execution struct {
-	ID         string            `json:"id"`
-	CommandID  string            `json:"commandId"`
-	Title      string            `json:"title"`
-	Text       string            `json:"text"`
-	Shell      string            `json:"shell"`
-	Platform   string            `json:"platform"`
-	Directory  string            `json:"directory"`
-	Fields     []string          `json:"fields"`
-	Values     map[string]string `json:"values"`
-	OmitOutput bool              `json:"omitOutput,omitempty"`
+	ID            string            `json:"id"`
+	CommandID     string            `json:"commandId"`
+	Title         string            `json:"title"`
+	Text          string            `json:"text"`
+	Shell         string            `json:"shell"`
+	Platform      string            `json:"platform"`
+	Directory     string            `json:"directory"`
+	Fields        []string          `json:"fields"`
+	Values        map[string]string `json:"values"`
+	OmitOutput    bool              `json:"omitOutput,omitempty"`
+	WorkspaceID   string            `json:"workspaceId,omitempty"`
+	WorkspaceName string            `json:"workspaceName,omitempty"`
 }
 
 type Activity struct {

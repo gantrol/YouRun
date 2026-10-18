@@ -37,19 +37,29 @@ func projectLogoOption(directory string, icon discovery.IconCandidate) ProjectLo
 	return ProjectLogoOption{ID: hex.EncodeToString(digest[:]), Name: icon.Name, Source: source, Data: icon.Data}
 }
 
+type ProjectWorkspaceDetail struct {
+	ID        string                `json:"id"`
+	Name      string                `json:"name"`
+	Directory string                `json:"directory"`
+	IsDefault bool                  `json:"isDefault,omitempty"`
+	Source    engine.SourceSnapshot `json:"source"`
+}
+
 type ProjectDetails struct {
-	Directory    string                    `json:"directory"`
-	Logo         *discovery.Logo           `json:"logo"`
-	Logos        []ProjectLogoOption       `json:"logos"`
-	Names        []discovery.NameCandidate `json:"names"`
-	SelectedLogo string                    `json:"selectedLogo"`
-	CustomAvatar bool                      `json:"customAvatar"`
-	Revision     int64                     `json:"revision"`
-	ScannedAt    string                    `json:"scannedAt"`
-	Issues       []discovery.Issue         `json:"issues"`
-	cacheKey     string
-	scanned      time.Time
-	dependencies map[string]fileStamp
+	Directory       string                    `json:"directory"`
+	Logo            *discovery.Logo           `json:"logo"`
+	Logos           []ProjectLogoOption       `json:"logos"`
+	Names           []discovery.NameCandidate `json:"names"`
+	SelectedLogo    string                    `json:"selectedLogo"`
+	CustomAvatar    bool                      `json:"customAvatar"`
+	Revision        int64                     `json:"revision"`
+	ScannedAt       string                    `json:"scannedAt"`
+	Issues          []discovery.Issue         `json:"issues"`
+	Workspaces      []ProjectWorkspaceDetail  `json:"workspaces,omitempty"`
+	ActiveWorkspace string                    `json:"activeWorkspace,omitempty"`
+	cacheKey        string
+	scanned         time.Time
+	dependencies    map[string]fileStamp
 }
 
 type fileStamp struct {
@@ -307,6 +317,23 @@ func (h *Host) serveProjectDetails(w http.ResponseWriter, r *http.Request) {
 			h.projectDetails[id] = cached
 			h.projectDetailsMu.Unlock()
 		}
+		locations, activeID := projectmeta.ResolveLocations(entry, options.Directories)
+		workspaces := make([]ProjectWorkspaceDetail, 0, len(locations))
+		for _, loc := range locations {
+			src := engine.InspectSource(ctx, loc.Directory, loc.ID, loc.Name, request.RefreshID == id)
+			workspaces = append(workspaces, ProjectWorkspaceDetail{
+				ID:        loc.ID,
+				Name:      loc.Name,
+				Directory: loc.Directory,
+				IsDefault: loc.IsDefault,
+				Source:    src,
+			})
+			if loc.ID == activeID {
+				cached.Directory = loc.Directory
+			}
+		}
+		cached.Workspaces = workspaces
+		cached.ActiveWorkspace = activeID
 		result[id] = cached
 	}
 	h.projectDetailsMu.Lock()
@@ -335,6 +362,7 @@ func (h *Host) serveOpenProject(w http.ResponseWriter, r *http.Request) {
 	}
 	var request struct {
 		ID         string `json:"id"`
+		Directory  string `json:"directory,omitempty"`
 		Opener     string `json:"opener,omitempty"`
 		Executable string `json:"executable,omitempty"`
 	}
@@ -344,21 +372,42 @@ func (h *Host) serveOpenProject(w http.ResponseWriter, r *http.Request) {
 		fail(400, "invalidRequest")
 		return
 	}
-	definitions, err := h.projectDefinitions(r.Context())
-	if err != nil {
-		fail(503, "connectionLost")
-		return
-	}
-	metadata, err := projectmeta.Load(h.dataDir)
-	if err != nil {
-		fail(500, "projectMetadataLoadFailed")
-		return
-	}
-	roots := projectRoots(request.ID, definitions, metadata[request.ID])
 	directory := ""
-	for _, project := range definitions.Projects {
-		if project.ID == request.ID && len(roots) > 0 {
-			directory = roots[0]
+	if request.ID == "" && request.Directory != "" && request.Opener == "" && request.Executable == "" {
+		if filepath.IsAbs(request.Directory) && !strings.Contains(strings.ToLower(request.Directory), "trash") {
+			directory = filepath.Clean(request.Directory)
+		}
+	} else {
+		definitions, err := h.projectDefinitions(r.Context())
+		if err != nil {
+			fail(503, "connectionLost")
+			return
+		}
+		metadata, err := projectmeta.Load(h.dataDir)
+		if err != nil {
+			fail(500, "projectMetadataLoadFailed")
+			return
+		}
+		var cmdDirs []string
+		for _, cmd := range definitions.Commands {
+			if cmd.Project != nil && *cmd.Project == request.ID && cmd.Directory != "" {
+				cmdDirs = append(cmdDirs, cmd.Directory)
+			}
+		}
+		locations, activeID := projectmeta.ResolveLocations(metadata[request.ID], cmdDirs)
+		roots := projectRoots(request.ID, definitions, metadata[request.ID])
+		for _, project := range definitions.Projects {
+			if project.ID == request.ID {
+				if len(roots) > 0 {
+					directory = roots[0]
+				}
+				for _, loc := range locations {
+					if (request.Directory != "" && filepath.Clean(loc.Directory) == filepath.Clean(request.Directory)) || (request.Directory == "" && loc.ID == activeID) {
+						directory = loc.Directory
+						break
+					}
+				}
+			}
 		}
 	}
 	info, err := os.Stat(directory)

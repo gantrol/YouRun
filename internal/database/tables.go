@@ -37,6 +37,9 @@ func array(name string) column {
 func object(name string) column {
 	return column{name: name, declaration: "TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(\"" + name + "\") AND json_type(\"" + name + "\")='object')", fallback: "'{}'", json: true}
 }
+func nullableObject(name string) column {
+	return column{name: name, declaration: "TEXT DEFAULT NULL CHECK(\"" + name + "\" IS NULL OR (json_valid(\"" + name + "\") AND json_type(\"" + name + "\")='object'))", fallback: "NULL", json: true}
+}
 
 var projects = table{"projects", "definitions", []column{text("name"), array("buttons"), boolean("hidden")}, true}
 var commandsV3 = table{"commands", "definitions", []column{
@@ -46,11 +49,13 @@ var collections = table{"collections", "definitions", []column{text("name"), nul
 var runsV3 = table{"runs", "runs", []column{
 	text("commandId"), text("title"), text("text"), text("template"), text("directory"), object("values"), text("shell"), text("time"), text("status"), number("pid"), {name: "exitCode", declaration: "INTEGER", fallback: "NULL"},
 }, true}
-var metadata = table{"project_metadata", "metadata", []column{array("roots"), text("logoId"), text("avatar"), number("revision")}, false}
+var metadataV1 = table{"project_metadata", "metadata", []column{array("roots"), text("logoId"), text("avatar"), number("revision")}, false}
+var metadata = table{"project_metadata", "metadata", []column{array("roots"), array("locations"), text("activeLocationId"), text("logoId"), text("avatar"), number("revision")}, false}
 
 // Keep the previously executed migration's column lists unchanged.
 var commands = table{"commands", "definitions", append(commandsV3.columns, boolean("omitOutput")), true}
-var runs = table{"runs", "runs", append(runsV3.columns, boolean("omitOutput")), true}
+var runsV4 = table{"runs", "runs", append(runsV3.columns, boolean("omitOutput")), true}
+var runs = table{"runs", "runs", append(runsV4.columns, nullableObject("launchSource")), true}
 
 func (t table) schema() string {
 	parts := []string{"id TEXT PRIMARY KEY NOT NULL CHECK(length(id) BETWEEN 1 AND 80)"}

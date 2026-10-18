@@ -75,6 +75,13 @@ func activeStatus(status string) bool            { return status == "running" ||
 func terminalStatus(status string) bool {
 	return oneOf(status, "success", "failed", "stopped", "handedOff")
 }
+func sameExecutionDir(a, b string) bool {
+	if a == b {
+		return true
+	}
+	rel, err := filepath.Rel(filepath.Clean(a), filepath.Clean(b))
+	return err == nil && rel == "."
+}
 
 func (c *Client) readState(id string) (executionState, error) {
 	var state executionState
@@ -225,7 +232,7 @@ func (c *Client) start(execution Execution, previous string) (Run, error) {
 		// forever. A new explicit start is a separate execution, never recovery
 		// or replay of the unowned process.
 		if activeStatus(run.Status) {
-			if run.CommandID == execution.CommandID && run.ID != previous {
+			if run.CommandID == execution.CommandID && sameExecutionDir(run.Directory, execution.Directory) && run.ID != previous {
 				return run, errors.New("alreadyRunning")
 			}
 			count++
@@ -247,8 +254,9 @@ func (c *Client) start(execution Execution, previous string) (Run, error) {
 		return Run{}, err
 	}
 	// Environment values travel only through process inheritance, never the journal.
+	launchSource := InspectSource(context.Background(), execution.Directory, execution.WorkspaceID, execution.WorkspaceName, true)
 	manifest := executionManifest{Schema: ExecutionSchema, Execution: execution, Previous: previous, Executor: binary}
-	state := executionState{Schema: ExecutionSchema, Phase: "pending", Run: Run{ID: execution.ID, CommandID: execution.CommandID, Title: execution.Title, Text: expanded, Template: execution.Text, Directory: execution.Directory, Values: execution.Values, Shell: execution.Shell, Time: time.Now().UTC().Format(time.RFC3339Nano), Status: "running", OmitOutput: execution.OmitOutput}}
+	state := executionState{Schema: ExecutionSchema, Phase: "pending", Run: Run{ID: execution.ID, CommandID: execution.CommandID, Title: execution.Title, Text: expanded, Template: execution.Text, Directory: execution.Directory, Values: execution.Values, Shell: execution.Shell, Time: time.Now().UTC().Format(time.RFC3339Nano), Status: "running", OmitOutput: execution.OmitOutput, LaunchSource: &launchSource}}
 	// Publish a complete directory in one rename, before starting any process.
 	temp, err := os.MkdirTemp(filepath.Join(c.dir, "executions"), ".pending-")
 	if err != nil {

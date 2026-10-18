@@ -81,7 +81,7 @@ func (s *Store) SyncRuntime(ctx context.Context, observed int64, data []byte) er
 			return err
 		}
 		insert := strings.Split(runs.upsertSQL(), " ON CONFLICT(id)")[0]
-		if _, err = tx.ExecContext(ctx, insert+` ON CONFLICT(id) DO UPDATE SET status=excluded.status,pid=excluded.pid,"exitCode"=excluded."exitCode" WHERE runs.status IS NOT excluded.status OR runs.pid IS NOT excluded.pid OR runs."exitCode" IS NOT excluded."exitCode"`, string(updates)); err != nil {
+		if _, err = tx.ExecContext(ctx, insert+` ON CONFLICT(id) DO UPDATE SET status=excluded.status,pid=excluded.pid,"exitCode"=excluded."exitCode","launchSource"=coalesce(excluded."launchSource",runs."launchSource") WHERE runs.status IS NOT excluded.status OR runs.pid IS NOT excluded.pid OR runs."exitCode" IS NOT excluded."exitCode" OR runs."launchSource" IS NOT excluded."launchSource"`, string(updates)); err != nil {
 			return err
 		}
 		removed := []string{}

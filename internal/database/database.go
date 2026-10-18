@@ -84,6 +84,10 @@ func Open(directory string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err = store.migrateSourceAndWorkspaces(ctx); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err = os.Chmod(path, 0600); err != nil {
 		db.Close()
 		return nil, err
@@ -135,7 +139,7 @@ CREATE TRIGGER settings_update AFTER UPDATE ON settings BEGIN UPDATE revisions S
 CREATE TRIGGER settings_delete AFTER DELETE ON settings BEGIN UPDATE revisions SET version=version+1 WHERE scope='settings' OR (scope='definitions' AND OLD.key='locale'); END;`); err != nil {
 		return err
 	}
-	for _, t := range []table{projects, commandsV3, runsV3, metadata} {
+	for _, t := range []table{projects, commandsV3, runsV3, metadataV1} {
 		if _, err = tx.ExecContext(ctx, t.schema()); err != nil {
 			return err
 		}
@@ -227,7 +231,7 @@ END;`); err != nil {
 		entries = append(entries, encoded)
 	}
 	encoded, _ := json.Marshal(entries)
-	if _, err = tx.ExecContext(ctx, metadata.upsertSQL(), string(encoded)); err != nil {
+	if _, err = tx.ExecContext(ctx, metadataV1.upsertSQL(), string(encoded)); err != nil {
 		return err
 	}
 	appearance, err := legacy(directory, "appearance.json", `{"skin":"comic"}`)

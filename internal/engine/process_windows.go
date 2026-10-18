@@ -52,6 +52,9 @@ func prepareDetached(cmd *exec.Cmd) {
 func prepareChild(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_SUSPENDED | windows.CREATE_NEW_PROCESS_GROUP}
 }
+func prepareHidden(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
+}
 
 type processGroup struct{ job windows.Handle }
 

@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { projectAPI } from "./project-api";
 import { api } from "./api";
-import type { Command, Project } from "./model";
+import type { Command, Project, SourceSnapshot } from "./model";
+
+export type ProjectWorkspaceDetail = {
+  id: string;
+  name: string;
+  directory: string;
+  isDefault?: boolean;
+  source: SourceSnapshot;
+};
 
 export type ProjectDetails = {
   directory: string;
@@ -13,6 +21,8 @@ export type ProjectDetails = {
   revision?: number;
   scannedAt?: string;
   issues?: { path: string; code: string }[];
+  workspaces?: ProjectWorkspaceDetail[];
+  activeWorkspace?: string;
 };
 
 export function useProjectDetails(
@@ -182,6 +192,50 @@ export function useProjectDetails(
       setChangingLogo("");
     }
   }
+  async function mutateWorkspaces(
+    id: string,
+    payload: {
+      action: "select" | "add" | "rename" | "setDefault" | "remove";
+      locationId?: string;
+      name?: string;
+      directory?: string;
+      chooseDirectory?: boolean;
+    },
+  ) {
+    const detail = detailsRef.current[id];
+    const response = await api<
+      | { cancelled: true }
+      | {
+          cancelled?: false;
+          revision: number;
+          directory: string;
+          activeWorkspace: string;
+          workspaces: ProjectWorkspaceDetail[];
+        }
+    >("project-workspaces", "POST", {
+      id,
+      ...payload,
+      revision: detail?.revision ?? 0,
+    });
+    if ("cancelled" in response && response.cancelled) return response;
+    setDetails((previous) => {
+      const current = previous[id] ?? {
+        directory: response.directory,
+        logo: null,
+      };
+      return {
+        ...previous,
+        [id]: {
+          ...current,
+          directory: response.directory || current.directory,
+          revision: response.revision,
+          activeWorkspace: response.activeWorkspace,
+          workspaces: response.workspaces,
+        },
+      };
+    });
+    return response;
+  }
   return {
     details,
     errors,
@@ -191,6 +245,7 @@ export function useProjectDetails(
     rescan,
     selectLogo: (id: string, logoId: string) => changeLogo(id, logoId),
     chooseAvatar: (id: string) => changeLogo(id),
+    mutateWorkspaces,
   };
 }
 

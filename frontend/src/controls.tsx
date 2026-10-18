@@ -47,18 +47,20 @@ export function Picker({
   label,
   options,
   disabled,
+  className,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
   options: [string, string][];
   disabled?: boolean;
+  className?: string;
 }) {
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
         aria-label={label}
-        className="w-full border-muted-foreground/75 bg-surface"
+        className={`w-full border-muted-foreground/75 bg-surface ${className ?? ""}`}
       >
         <SelectValue />
       </SelectTrigger>

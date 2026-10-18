@@ -1,11 +1,16 @@
 package desktop
 
 import (
+	"context"
+	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"commandmanager.local/core/internal/cli"
+	"commandmanager.local/core/internal/workspace"
 )
 
 // CommandLine dispatches before GUI, database, HTTP host or update startup.
@@ -14,6 +19,28 @@ func CommandLine() (handled bool, exitCode int) {
 	args := filterPlatformArgs(runtime.GOOS, os.Args[1:])
 	if len(args) == 0 {
 		return false, 0
+	}
+	cli.ResourceHandler = func(ctx context.Context, mode string, dataDir string, ws *workspace.Service, targetPath string, recursive bool) (any, error) {
+		qCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+		defer cancel()
+		switch mode {
+		case "processes":
+			return QueryProcesses(qCtx, dataDir, ws)
+		case "ports":
+			return QueryPorts(qCtx, dataDir, ws)
+		case "files":
+			trimmed := strings.TrimSpace(targetPath)
+			if trimmed == "" || strings.Contains(strings.ToLower(trimmed), "trash") {
+				return nil, errors.New("invalidDirectory")
+			}
+			absPath, err := filepath.Abs(trimmed)
+			if err != nil {
+				return nil, errors.New("invalidDirectory")
+			}
+			return QueryFiles(qCtx, dataDir, ws, filepath.Clean(absPath), recursive)
+		default:
+			return nil, errors.New("unknownResourceMode")
+		}
 	}
 	return true, cli.Main(args)
 }

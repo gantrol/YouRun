@@ -8,10 +8,12 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"commandmanager.local/core/internal/database"
 	"commandmanager.local/core/internal/engine"
+	"commandmanager.local/core/internal/projectmeta"
 )
 
 type Request func(method, path string, body []byte) (int, []byte, error)
@@ -148,7 +150,31 @@ func (s *Service) Request(ctx context.Context, method, path string, body []byte)
 			if directory == "" {
 				directory = command.Directory
 			}
-			execution := engine.Execution{ID: launch.ID, CommandID: command.ID, Title: title, Text: command.Text, Shell: command.Shell, Platform: command.Platform, Directory: directory, Fields: command.Fields, Values: values, OmitOutput: command.OmitOutput}
+			var wsID, wsName string
+			if command.Project != nil {
+				if metaRows, metaErr := s.store.ReadMetadata(ctx); metaErr == nil {
+					var entry projectmeta.Entry
+					if raw, ok := metaRows[*command.Project]; ok {
+						_ = json.Unmarshal(raw, &entry)
+					}
+					var fallbackDirs []string
+					for _, cmd := range state.Definitions.Commands {
+						if cmd.Project != nil && *cmd.Project == *command.Project && cmd.Directory != "" {
+							fallbackDirs = append(fallbackDirs, cmd.Directory)
+						}
+					}
+					locations, _ := projectmeta.ResolveLocations(entry, fallbackDirs)
+					cleanDir := filepath.Clean(directory)
+					for _, loc := range locations {
+						rel, relErr := filepath.Rel(filepath.Clean(loc.Directory), cleanDir)
+						if relErr == nil && (rel == "." || (!strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel))) {
+							wsID, wsName = loc.ID, loc.Name
+							break
+						}
+					}
+				}
+			}
+			execution := engine.Execution{ID: launch.ID, CommandID: command.ID, Title: title, Text: command.Text, Shell: command.Shell, Platform: command.Platform, Directory: directory, Fields: command.Fields, Values: values, OmitOutput: command.OmitOutput, WorkspaceID: wsID, WorkspaceName: wsName}
 			if err = execution.Validate(); err != nil {
 				return failure(400, err.Error())
 			}

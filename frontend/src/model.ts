@@ -46,6 +46,22 @@ export type Command = {
   unavailable?: boolean;
   aliases?: string[];
 };
+export type SourceSnapshot = {
+  workspaceId?: string;
+  workspaceName?: string;
+  directory: string;
+  repoRoot?: string;
+  branch?: string;
+  commit?: string;
+  shortCommit?: string;
+  tag?: string;
+  detached?: boolean;
+  dirty?: boolean;
+  nonGit?: boolean;
+  inaccessible?: boolean;
+  observedAt: string;
+};
+
 export type Collection = { id: string; name: string; parent: string | null; commandIds: string[] };
 export type Run = {
   id: string;
@@ -68,6 +84,7 @@ export type Run = {
   exitCode?: number;
   error?: string;
   omitOutput?: boolean;
+  launchSource?: SourceSnapshot | null;
 };
 export function commandTitle(command: Command, messages: Messages) {
   return (
