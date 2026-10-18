@@ -59,5 +59,10 @@ func updateUserPath(enabled bool, binDir string, state *integrationReceipt) (con
 		_ = os.Remove(state.AddedPathDir)
 		state.AddedPathDir = ""
 	}
+	if target, err := os.Readlink(linkPath); err == nil && strings.TrimSpace(target) != "" {
+		if binDir == "" || filepath.Clean(filepath.Dir(target)) == filepath.Clean(binDir) {
+			_ = os.Remove(linkPath)
+		}
+	}
 	return false, linkPath, nil
 }

@@ -1078,14 +1078,20 @@ func commandCatalog() []CLICommandSpec {
 			Name:     "integrate",
 			Category: "agent-protocol",
 			Mutates:  true,
-			Summary:  "Install, update, or remove global AI Agent skills (~/.agents, ~/.gemini, ~/.claude, ~/.codex), MCP client configs (Cursor, Claude, Windsurf), and user PATH.",
-			Usage:    "yourun integrate [--enable | --disable | --status]",
+			Summary:  "Inspect, selectively enable, or revoke individual AI Agent integrations (user PATH, global Agent Skills, and MCP client configs).",
+			Usage:    "yourun integrate [--status] | [--enable --target ID[,ID...]|all] | [--disable [--target ID[,ID...]|all]]",
 			Flags: []CLIFlagSpec{
-				{Name: "--enable", Type: "bool", Default: "true", Description: "Install/update global Agent skills, MCP configs, and user PATH"},
-				{Name: "--disable", Type: "bool", Default: "false", Description: "Remove global Agent skills, MCP configs, and user PATH"},
-				{Name: "--status", Type: "bool", Default: "false", Description: "Inspect current Agent integration state without modifying files"},
+				{Name: "--status", Type: "bool", Default: "true", Description: "Inspect current Agent integration targets without modifying files"},
+				{Name: "--enable", Type: "bool", Default: "false", Description: "Enable the specified --target integration(s)"},
+				{Name: "--disable", Type: "bool", Default: "false", Description: "Revoke the specified --target integration(s) (or all when --target is omitted)"},
+				{Name: "--target", Type: "string", Description: "Target ID(s): user-path, skill-gemini, skill-agents, skill-claude, skill-codex, mcp-cursor, mcp-claude-code, mcp-claude-desktop, mcp-windsurf, or all"},
 			},
-			Examples: []string{"yourun integrate", "yourun integrate --status", "yourun integrate --disable"},
+			Examples: []string{
+				"yourun integrate --status",
+				"yourun integrate --enable --target user-path,skill-gemini",
+				"yourun integrate --disable --target mcp-cursor",
+				"yourun integrate --disable",
+			},
 		},
 	}
 }

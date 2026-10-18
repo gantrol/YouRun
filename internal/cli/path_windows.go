@@ -81,28 +81,40 @@ func updateUserPath(enabled bool, binDir string, state *integrationReceipt) (con
 		return true, pathLocation, nil
 	}
 
-	targetToRemove := binDir
-	if state != nil && strings.TrimSpace(state.AddedPathDir) != "" {
-		targetToRemove = state.AddedPathDir
+	removeDirs := []string{binDir}
+	if state != nil && strings.TrimSpace(state.AddedPathDir) != "" && !samePathDir(state.AddedPathDir, binDir) {
+		removeDirs = append(removeDirs, state.AddedPathDir)
 	}
-	if state == nil || strings.TrimSpace(state.AddedPathDir) == "" {
-		return pathListContains(val, binDir), pathLocation, nil
-	}
-	if !pathListContains(val, targetToRemove) {
-		state.AddedPathDir = ""
-		return false, pathLocation, nil
+	shouldRemove := func(part string) bool {
+		for _, target := range removeDirs {
+			if target != "" && samePathDir(part, target) {
+				return true
+			}
+		}
+		return false
 	}
 	var kept []string
+	removedAny := false
 	for _, part := range splitPathList(val) {
-		if !samePathDir(part, targetToRemove) {
-			kept = append(kept, part)
+		if shouldRemove(part) {
+			removedAny = true
+			continue
 		}
+		kept = append(kept, part)
+	}
+	if !removedAny {
+		if state != nil {
+			state.AddedPathDir = ""
+		}
+		return false, pathLocation, nil
 	}
 	newVal := strings.Join(kept, ";")
 	if err := setRegistryPathValue(key, newVal, valType); err != nil {
 		return true, pathLocation, err
 	}
-	state.AddedPathDir = ""
+	if state != nil {
+		state.AddedPathDir = ""
+	}
 	broadcastEnvironmentChange()
 	return false, pathLocation, nil
 }

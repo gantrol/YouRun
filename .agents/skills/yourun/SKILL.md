@@ -88,5 +88,5 @@ If any item has `ownership: "managed"`, stop its `runId` via `yourun stop --id <
 ### 6. Self-Discovery, Global Registration & Error Recovery
 - Inspect environment capabilities & workflows: `yourun capabilities`
 - Inspect detailed command flags, exit codes, and error catalog: `yourun describe [subcommand]`
-- Refresh global Agent skills, MCP configs & `PATH` registration: `yourun integrate [--enable | --disable | --status]`
+- Inspect, selectively enable, or revoke Agent integrations: `yourun integrate [--status] | [--enable --target ID[,ID...]] | [--disable [--target ID[,ID...]]]`
 - Whenever a command fails with exit code `2` (e.g., `ambiguousProject`, `ambiguousCommand`, `ambiguousRun`, `commandMissing`, `alreadyRunning`), read the `candidates` array and `recovery` hint in the JSON response to retry with the exact `--project`, `--command`, or `--id`.

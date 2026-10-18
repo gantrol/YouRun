@@ -15,8 +15,9 @@ import (
 type AgentIntegrationTarget struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
-	Kind       string `json:"kind"` // "skill" | "mcp" | "path"
+	Kind       string `json:"kind"` // "path" | "skill" | "mcp"
 	Path       string `json:"path"`
+	Detected   bool   `json:"detected"`
 	Configured bool   `json:"configured"`
 	Note       string `json:"note,omitempty"`
 }
@@ -102,6 +103,10 @@ func ReadAgentIntegration(ctx context.Context, dataDir string) (AgentIntegration
 }
 
 func WriteAgentIntegration(ctx context.Context, dataDir string, enabled bool) (AgentIntegrationSettings, error) {
+	return WriteAgentIntegrationTargets(ctx, dataDir, []string{"all"}, enabled)
+}
+
+func WriteAgentIntegrationTargets(ctx context.Context, dataDir string, targetIDs []string, enabled bool) (AgentIntegrationSettings, error) {
 	integrationMu.Lock()
 	defer integrationMu.Unlock()
 
@@ -114,11 +119,48 @@ func WriteAgentIntegration(ctx context.Context, dataDir string, enabled bool) (A
 		}, errors.New(reason)
 	}
 
-	receipt := loadIntegrationReceipt(dataDir)
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return AgentIntegrationSettings{}, err
 	}
+
+	skills := skillTargetSpecs(home)
+	mcps := mcpTargetSpecs(home)
+	known := map[string]bool{"user-path": true}
+	for _, s := range skills {
+		known[s.id] = true
+	}
+	for _, m := range mcps {
+		known[m.id] = true
+	}
+
+	selected := map[string]bool{}
+	applyAll := false
+	for _, raw := range targetIDs {
+		for _, part := range strings.Split(raw, ",") {
+			id := strings.TrimSpace(part)
+			if id == "" {
+				continue
+			}
+			if id == "all" {
+				applyAll = true
+				continue
+			}
+			if !known[id] {
+				return AgentIntegrationSettings{}, errors.New("invalidRequest")
+			}
+			selected[id] = true
+		}
+	}
+	if !applyAll && len(selected) == 0 {
+		if !enabled {
+			applyAll = true
+		} else {
+			return AgentIntegrationSettings{}, errors.New("invalidRequest")
+		}
+	}
+
+	receipt := loadIntegrationReceipt(dataDir)
 
 	if enabled {
 		if runtime.GOOS == "windows" && strings.HasSuffix(strings.ToLower(cliPath), ".cmd") {
@@ -129,37 +171,56 @@ func WriteAgentIntegration(ctx context.Context, dataDir string, enabled bool) (A
 		}
 		skillMD := renderEmbeddedSkillMD(cliPath, exePath)
 		openAIYAML := renderEmbeddedOpenAIYAML(cliPath)
-		for _, spec := range skillTargetSpecs(home) {
-			if !spec.alwaysInstall && !dirExists(spec.parentCheck) {
+		for _, spec := range skills {
+			if !applyAll && !selected[spec.id] {
+				continue
+			}
+			if applyAll && !spec.alwaysInstall && !dirExists(spec.parentCheck) {
 				continue
 			}
 			if err := writeSkillFiles(spec.dir, skillMD, openAIYAML); err != nil {
 				return AgentIntegrationSettings{}, err
 			}
 		}
-		for _, mcpSpec := range mcpTargetSpecs(home) {
-			if !mcpSpec.shouldManage() {
+		for _, mcpSpec := range mcps {
+			if !applyAll && !selected[mcpSpec.id] {
 				continue
 			}
-			_ = upsertMCPServerConfig(mcpSpec.path, exePath)
+			if applyAll && !mcpSpec.shouldManage() {
+				continue
+			}
+			if err := upsertMCPServerConfig(mcpSpec.path, exePath); err != nil {
+				return AgentIntegrationSettings{}, err
+			}
 		}
-		_, _, _ = updateUserPath(true, binDir, &receipt)
-		receipt.Enabled = true
+		if applyAll || selected["user-path"] {
+			if _, _, err := updateUserPath(true, binDir, &receipt); err != nil {
+				return AgentIntegrationSettings{}, err
+			}
+		}
 		receipt.Executable = exePath
-		saveIntegrationReceipt(dataDir, receipt)
 	} else {
-		for _, spec := range skillTargetSpecs(home) {
+		for _, spec := range skills {
+			if !applyAll && !selected[spec.id] {
+				continue
+			}
 			_ = os.RemoveAll(spec.dir)
 		}
-		for _, mcpSpec := range mcpTargetSpecs(home) {
+		for _, mcpSpec := range mcps {
+			if !applyAll && !selected[mcpSpec.id] {
+				continue
+			}
 			_ = removeMCPServerConfig(mcpSpec.path)
 		}
-		_, _, _ = updateUserPath(false, binDir, &receipt)
-		receipt.Enabled = false
-		saveIntegrationReceipt(dataDir, receipt)
+		if applyAll || selected["user-path"] {
+			_, _, _ = updateUserPath(false, binDir, &receipt)
+		}
 	}
 
-	return readAgentIntegrationLocked(ctx, dataDir)
+	nextState, err := readAgentIntegrationLocked(ctx, dataDir)
+	receipt.Enabled = nextState.Enabled
+	saveIntegrationReceipt(dataDir, receipt)
+	return nextState, err
 }
 
 func readAgentIntegrationLocked(ctx context.Context, dataDir string) (AgentIntegrationSettings, error) {
@@ -176,50 +237,55 @@ func readAgentIntegrationLocked(ctx context.Context, dataDir string) (AgentInteg
 	}
 
 	var targets []AgentIntegrationTarget
-	anySkillConfigured := false
-
-	for _, spec := range skillTargetSpecs(home) {
-		skillFile := filepath.Join(spec.dir, "SKILL.md")
-		configured := fileExists(skillFile)
-		if configured {
-			anySkillConfigured = true
-		}
-		if configured || spec.alwaysInstall || dirExists(spec.parentCheck) {
-			targets = append(targets, AgentIntegrationTarget{
-				ID:         spec.id,
-				Name:       spec.name,
-				Kind:       "skill",
-				Path:       skillFile,
-				Configured: configured,
-			})
-		}
-	}
-
-	for _, mcpSpec := range mcpTargetSpecs(home) {
-		configured, note := inspectMCPServerConfig(mcpSpec.path)
-		if configured || mcpSpec.shouldManage() {
-			targets = append(targets, AgentIntegrationTarget{
-				ID:         mcpSpec.id,
-				Name:       mcpSpec.name,
-				Kind:       "mcp",
-				Path:       mcpSpec.path,
-				Configured: configured,
-				Note:       note,
-			})
-		}
-	}
+	anyConfigured := false
 
 	pathConfigured, pathLocation := checkUserPath(binDir)
+	if pathConfigured {
+		anyConfigured = true
+	}
 	targets = append(targets, AgentIntegrationTarget{
 		ID:         "user-path",
 		Name:       "PATH (yourun)",
 		Kind:       "path",
 		Path:       pathLocation,
+		Detected:   true,
 		Configured: pathConfigured,
 	})
 
+	for _, spec := range skillTargetSpecs(home) {
+		skillFile := filepath.Join(spec.dir, "SKILL.md")
+		configured := fileExists(skillFile)
+		if configured {
+			anyConfigured = true
+		}
+		targets = append(targets, AgentIntegrationTarget{
+			ID:         spec.id,
+			Name:       spec.name,
+			Kind:       "skill",
+			Path:       skillFile,
+			Detected:   configured || dirExists(spec.parentCheck),
+			Configured: configured,
+		})
+	}
+
+	for _, mcpSpec := range mcpTargetSpecs(home) {
+		configured, note := inspectMCPServerConfig(mcpSpec.path)
+		if configured {
+			anyConfigured = true
+		}
+		targets = append(targets, AgentIntegrationTarget{
+			ID:         mcpSpec.id,
+			Name:       mcpSpec.name,
+			Kind:       "mcp",
+			Path:       mcpSpec.path,
+			Detected:   configured || mcpSpec.shouldManage(),
+			Configured: configured,
+			Note:       note,
+		})
+	}
+
 	state.Targets = targets
-	state.Enabled = supported && anySkillConfigured
+	state.Enabled = supported && anyConfigured
 	return state, ctx.Err()
 }
 
@@ -234,17 +300,17 @@ type skillSpec struct {
 func skillTargetSpecs(home string) []skillSpec {
 	return []skillSpec{
 		{
-			id:            "skill-agents",
-			name:          "Agent Skills (~/.agents)",
-			dir:           filepath.Join(home, ".agents", "skills", "yourun"),
-			parentCheck:   filepath.Join(home, ".agents"),
-			alwaysInstall: true,
-		},
-		{
 			id:            "skill-gemini",
 			name:          "Antigravity / Gemini (~/.gemini)",
 			dir:           filepath.Join(home, ".gemini", "config", "skills", "yourun"),
 			parentCheck:   filepath.Join(home, ".gemini"),
+			alwaysInstall: true,
+		},
+		{
+			id:            "skill-agents",
+			name:          "Agent Skills (~/.agents)",
+			dir:           filepath.Join(home, ".agents", "skills", "yourun"),
+			parentCheck:   filepath.Join(home, ".agents"),
 			alwaysInstall: true,
 		},
 		{
@@ -513,7 +579,7 @@ If any item has `+"`ownership: \"managed\"`"+`, stop its `+"`runId`"+` via `+"`y
 ### 6. Self-Discovery, Global Registration & Error Recovery
 - Inspect environment capabilities & workflows: `+"`yourun capabilities`"+`
 - Inspect detailed command flags, exit codes, and error catalog: `+"`yourun describe [subcommand]`"+`
-- Refresh global Agent skills, MCP configs & `+"`PATH`"+` registration: `+"`yourun integrate [--enable | --disable | --status]`"+`
+- Inspect, selectively enable, or revoke Agent integrations: `+"`yourun integrate [--status] | [--enable --target ID[,ID...]] | [--disable [--target ID[,ID...]]]`"+`
 - Whenever a command fails with exit code `+"`2`"+` (e.g., `+"`ambiguousProject`, `ambiguousCommand`, `ambiguousRun`, `commandMissing`, `alreadyRunning`"+`), read the `+"`candidates`"+` array and `+"`recovery`"+` hint in the JSON response to retry with the exact `+"`--project`, `--command`, or `--id`"+`.
 `, exePath, cliPath, cliPath, cliPath, cliPath, cliPath, cliPath, cliPath, cliPath, cliPath, cliPath, cliPath)
 }

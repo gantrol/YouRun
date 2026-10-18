@@ -120,9 +120,10 @@ No GUI, resident service, connection approval, or interactive stdin is required.
 	protocolFilter := flags.String("protocol", "", "Filter ports by tcp or udp")
 	stateFilter := flags.String("state", "", "Filter ports by state (e.g. listening, established)")
 	ownershipFilter := flags.String("ownership", "", "Filter OS resources by managed, unconfirmed, external, or yourun")
-	enableFlag := flags.Bool("enable", false, "Enable AI Agent integration")
-	disableFlag := flags.Bool("disable", false, "Disable and remove AI Agent integration")
+	enableFlag := flags.Bool("enable", false, "Enable selected AI Agent integration target(s)")
+	disableFlag := flags.Bool("disable", false, "Disable and revoke selected AI Agent integration target(s)")
 	statusFlag := flags.Bool("status", false, "Read AI Agent integration status without modifying files")
+	targetFlag := flags.String("target", "", "Comma-separated AI Agent integration target IDs (e.g. user-path,skill-gemini,mcp-cursor or all)")
 	if err = flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -135,7 +136,7 @@ No GUI, resident service, connection approval, or interactive stdin is required.
 	})
 
 	describeTarget := ""
-	integrateAction := "enable"
+	integrateAction := "status"
 	switch mode {
 	case "search", "list", "ports", "processes":
 		if *query == "" && flags.NArg() > 0 {
@@ -169,11 +170,13 @@ No GUI, resident service, connection approval, or interactive stdin is required.
 			integrateAction = "status"
 		} else if *disableFlag {
 			integrateAction = "disable"
+		} else if *enableFlag {
+			integrateAction = "enable"
 		} else if flags.NArg() == 1 {
 			switch strings.ToLower(strings.TrimSpace(flags.Arg(0))) {
 			case "status":
 				integrateAction = "status"
-			case "disable", "off", "remove", "uninstall":
+			case "disable", "off", "remove", "uninstall", "revoke":
 				integrateAction = "disable"
 			case "enable", "on", "install":
 				integrateAction = "enable"
@@ -216,7 +219,13 @@ No GUI, resident service, connection approval, or interactive stdin is required.
 		if integrateAction == "status" {
 			res, iErr = ReadAgentIntegration(context.Background(), *dir)
 		} else {
-			res, iErr = WriteAgentIntegration(context.Background(), *dir, integrateAction == "enable")
+			var targetIDs []string
+			if strings.TrimSpace(*targetFlag) != "" {
+				targetIDs = []string{*targetFlag}
+			} else if integrateAction == "disable" {
+				targetIDs = []string{"all"}
+			}
+			res, iErr = WriteAgentIntegrationTargets(context.Background(), *dir, targetIDs, integrateAction == "enable")
 		}
 		if iErr != nil {
 			return iErr

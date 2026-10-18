@@ -26,19 +26,29 @@ func (h *Host) serveAgentIntegration(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var input struct {
-			Enabled *bool `json:"enabled"`
+			Enabled *bool    `json:"enabled"`
+			Target  string   `json:"target,omitempty"`
+			Targets []string `json:"targets,omitempty"`
 		}
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&input) != nil || input.Enabled == nil || decoder.Decode(&struct{}{}) != io.EOF {
 			fail(http.StatusBadRequest, "invalidRequest")
 			return
 		}
-		settings, err := cli.WriteAgentIntegration(r.Context(), h.dataDir, *input.Enabled)
+		targetIDs := append([]string{}, input.Targets...)
+		if input.Target != "" {
+			targetIDs = append(targetIDs, input.Target)
+		}
+		settings, err := cli.WriteAgentIntegrationTargets(r.Context(), h.dataDir, targetIDs, *input.Enabled)
 		if err != nil {
 			code := "agentIntegrationSaveFailed"
 			if err.Error() == "agentIntegrationDevelopment" {
 				fail(http.StatusConflict, err.Error())
+				return
+			}
+			if err.Error() == "invalidRequest" {
+				fail(http.StatusBadRequest, err.Error())
 				return
 			}
 			fail(http.StatusInternalServerError, code)
