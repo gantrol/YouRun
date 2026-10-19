@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"commandmanager.local/core/internal/processcontrol"
 	"errors"
 	"flag"
 	"fmt"
@@ -144,13 +145,18 @@ func ExecuteRun(directory, id string) error {
 	defer log.Close()
 	// Real file handles go directly to the child. No Go Writer/pipe is allowed:
 	// killing this helper must not sever stdout/stderr or stop the command.
-	process, group, err := startIndependent(cmd, log)
+	state.GroupName = "Local\\YouRun-" + ID()
+	process, group, err := startIndependent(cmd, log, state.GroupName)
 	if err != nil {
 		return finish("failed", nil, err)
 	}
 	defer process.close()
 	defer group.close() // deliberately no kill-on-close or deferred stop
 	state.Run.PID, state.Phase = process.pid, "executing"
+	state.ControlVersion = 1
+	if target, err := processcontrol.Observe(process.pid); err == nil {
+		state.ProcessIdentity = target.StartedAt
+	}
 	if err = save(); err != nil {
 		fmt.Fprintln(os.Stderr, "persist PID:", err)
 	}
@@ -165,6 +171,8 @@ func ExecuteRun(directory, id string) error {
 	var result outcome
 	var rootExitedAt time.Time
 	rootFinished, stopping := false, false
+	var gracefulDeadline time.Time
+	holdGroup := false
 	for {
 		select {
 		case result = <-finished:
@@ -177,12 +185,28 @@ func ExecuteRun(directory, id string) error {
 			if err != nil {
 				return finish("unknown", nil, err)
 			}
-			if !active || (!stopping && result.err != nil) || time.Since(rootExitedAt) >= 500*time.Millisecond {
-				if active && stopping {
-					_ = group.stop()
-				}
+			if !active || (!stopping && !holdGroup && (result.err != nil || time.Since(rootExitedAt) >= 500*time.Millisecond)) {
 				break
 			}
+		}
+		var graceful struct {
+			ID string `json:"id"`
+		}
+		if err := readJSON(c.runPath(id, "graceful.json"), &graceful); err == nil && validID.MatchString(graceful.ID) && graceful.ID != state.ControlRequestID && !stopping {
+			state.ControlRequestID, state.ControlError = graceful.ID, ""
+			if err := group.graceful(); err != nil {
+				state.ControlError = "processGracefulUnsupported"
+			} else {
+				holdGroup = true
+				gracefulDeadline = time.Now().Add(8 * time.Second)
+				state.Run.Status = "stopping"
+			}
+			_ = save()
+		}
+		if !gracefulDeadline.IsZero() && time.Now().After(gracefulDeadline) {
+			gracefulDeadline = time.Time{}
+			state.Run.Status, state.ControlError = "running", "processExitTimeout"
+			_ = save()
 		}
 		if !stopping {
 			requested, err := stopRequested()
@@ -196,6 +220,8 @@ func ExecuteRun(directory, id string) error {
 					continue
 				}
 				stopping, state.Run.Status = true, "stopping"
+				holdGroup = false
+				gracefulDeadline = time.Time{}
 				if err = save(); err != nil {
 					fmt.Fprintln(os.Stderr, "persist stopping:", err)
 				}
@@ -203,7 +229,7 @@ func ExecuteRun(directory, id string) error {
 		}
 	}
 	code, status := result.code, "success"
-	if stopping {
+	if stopping || !gracefulDeadline.IsZero() {
 		status = "stopped"
 	} else if result.err != nil {
 		status = "failed"

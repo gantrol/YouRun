@@ -31,11 +31,16 @@ type executionManifest struct {
 	Executor  string    `json:"executor"`
 }
 type executionState struct {
-	Schema    int    `json:"schema"`
-	Run       Run    `json:"run"`
-	WorkerPID int    `json:"workerPid,omitempty"`
-	Phase     string `json:"phase"`
-	Error     string `json:"error,omitempty"`
+	ControlVersion   int    `json:"controlVersion,omitempty"`
+	ControlRequestID string `json:"controlRequestId,omitempty"`
+	ControlError     string `json:"controlError,omitempty"`
+	GroupName        string `json:"groupName,omitempty"`
+	ProcessIdentity  string `json:"processIdentity,omitempty"`
+	Schema           int    `json:"schema"`
+	Run              Run    `json:"run"`
+	WorkerPID        int    `json:"workerPid,omitempty"`
+	Phase            string `json:"phase"`
+	Error            string `json:"error,omitempty"`
 }
 
 func Open(directory, executable string) (*Client, error) {

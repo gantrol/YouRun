@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"commandmanager.local/core/internal/processcontrol"
 	"errors"
 	"golang.org/x/sys/windows"
 	"os"
@@ -99,7 +100,11 @@ func CanLaunchDetached() (bool, string) {
 	return true, "breakawayPermitted"
 }
 
-type processGroup struct{ job windows.Handle }
+type processGroup struct {
+	job        windows.Handle
+	pid        int
+	rootHandle windows.Handle
+}
 
 // Start suspended so no descendant can escape before assignment to the job.
 func attachProcess(cmd *exec.Cmd) (*processGroup, error) {
@@ -128,6 +133,69 @@ func attachProcess(cmd *exec.Cmd) (*processGroup, error) {
 }
 func (g *processGroup) stop() error { return windows.TerminateJobObject(g.job, 1) }
 func (g *processGroup) close()      { windows.CloseHandle(g.job) }
+
+var ignoreWorkerConsoleSignal = syscall.NewCallback(func(uint32) uintptr { return 1 })
+
+func (g *processGroup) graceful() error {
+	if g.pid <= 0 || g.rootHandle == 0 {
+		return errors.New("processGracefulUnsupported")
+	}
+	if status, err := windows.WaitForSingleObject(g.rootHandle, 0); err != nil || status != uint32(windows.WAIT_TIMEOUT) {
+		return errors.New("processGracefulUnsupported")
+	}
+	// ExecuteRun runs in its own detached helper. Newly launched commands have
+	// a private hidden console, so the break cannot reach unrelated terminals.
+	kernel := windows.NewLazySystemDLL("kernel32.dll")
+	if ok, _, _ := kernel.NewProc("AttachConsole").Call(uintptr(g.pid)); ok != 0 {
+		defer kernel.NewProc("FreeConsole").Call()
+		if ok, _, _ := kernel.NewProc("SetConsoleCtrlHandler").Call(ignoreWorkerConsoleSignal, 1); ok == 0 {
+			return errors.New("processGracefulUnsupported")
+		}
+		// An explicitly broken-away descendant may still share this console.
+		// Do not broadcast unless every other attached process is in our Job.
+		pids := make([]uint32, 4096)
+		count, _, _ := kernel.NewProc("GetConsoleProcessList").Call(uintptr(unsafe.Pointer(&pids[0])), uintptr(len(pids)))
+		if count == 0 || count > uintptr(len(pids)) {
+			return errors.New("processGracefulUnsupported")
+		}
+		for _, pid := range pids[:count] {
+			if int(pid) == os.Getpid() {
+				continue
+			}
+			h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+			if err != nil {
+				return errors.New("processGracefulUnsupported")
+			}
+			var member int32
+			ok, _, _ := kernel.NewProc("IsProcessInJob").Call(uintptr(h), uintptr(g.job), uintptr(unsafe.Pointer(&member)))
+			windows.CloseHandle(h)
+			if ok == 0 || member == 0 {
+				return errors.New("processGracefulUnsupported")
+			}
+		}
+		if ok, _, _ := kernel.NewProc("GenerateConsoleCtrlEvent").Call(windows.CTRL_BREAK_EVENT, 0); ok != 0 {
+			return nil
+		}
+	}
+	target, err := processcontrol.Observe(g.pid)
+	if err != nil {
+		return err
+	}
+	return processcontrol.RequestGraceful([]processcontrol.Target{target})
+}
+
+func groupContains(state executionState, target processcontrol.Target) bool {
+	members, err := processcontrol.JobMembers(state.GroupName)
+	if err != nil {
+		return false
+	}
+	for _, member := range members {
+		if member.PID == target.PID && member.StartedAt == target.StartedAt {
+			return true
+		}
+	}
+	return false
+}
 func (g *processGroup) alive() (bool, error) {
 	var info struct {
 		TotalUserTime, TotalKernelTime, ThisPeriodTotalUserTime, ThisPeriodTotalKernelTime int64

@@ -21,11 +21,15 @@ type independentProcess struct {
 // Assign the Job as part of CreateProcess, not in a suspended/resume sequence.
 // A helper crash at any instruction after creation leaves a runnable command.
 // Only stdin and the log are inherited, never the ownership lock or Job handle.
-func startIndependent(cmd *exec.Cmd, log *os.File) (*independentProcess, *processGroup, error) {
+func startIndependent(cmd *exec.Cmd, log *os.File, groupName ...string) (*independentProcess, *processGroup, error) {
 	if cmd.Err != nil {
 		return nil, nil, cmd.Err
 	}
-	job, err := windows.CreateJobObject(nil, nil)
+	var name *uint16
+	if len(groupName) > 0 {
+		name, _ = windows.UTF16PtrFromString(groupName[0])
+	}
+	job, err := windows.CreateJobObject(nil, name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -70,7 +74,8 @@ func startIndependent(cmd *exec.Cmd, log *os.File) (*independentProcess, *proces
 	}
 	startup := windows.StartupInfoEx{ProcThreadAttributeList: attributes.List()}
 	startup.Cb = uint32(unsafe.Sizeof(startup))
-	startup.Flags = windows.STARTF_USESTDHANDLES
+	startup.Flags = windows.STARTF_USESTDHANDLES | windows.STARTF_USESHOWWINDOW
+	startup.ShowWindow = windows.SW_HIDE
 	startup.StdInput, startup.StdOutput, startup.StdErr = handles[0], handles[1], handles[1]
 	application, err := windows.UTF16PtrFromString(cmd.Path)
 	if err != nil {
@@ -93,13 +98,13 @@ func startIndependent(cmd *exec.Cmd, log *os.File) (*independentProcess, *proces
 	}
 	block := utf16.Encode([]rune(strings.Join(environment, "\x00") + "\x00\x00"))
 	var info windows.ProcessInformation
-	flags := uint32(windows.EXTENDED_STARTUPINFO_PRESENT | windows.CREATE_UNICODE_ENVIRONMENT | windows.CREATE_NO_WINDOW | windows.CREATE_NEW_PROCESS_GROUP)
+	flags := uint32(windows.EXTENDED_STARTUPINFO_PRESENT | windows.CREATE_UNICODE_ENVIRONMENT | windows.CREATE_NEW_CONSOLE | windows.CREATE_NEW_PROCESS_GROUP)
 	if err = windows.CreateProcess(application, commandLine, nil, nil, true, flags, &block[0], directory, &startup.StartupInfo, &info); err != nil {
 		return nil, nil, err
 	}
 	windows.CloseHandle(info.Thread)
 	started = true
-	return &independentProcess{pid: int(info.ProcessId), handle: info.Process}, &processGroup{job: job}, nil
+	return &independentProcess{pid: int(info.ProcessId), handle: info.Process}, &processGroup{job: job, pid: int(info.ProcessId), rootHandle: info.Process}, nil
 }
 func (p *independentProcess) wait() (int, error) {
 	if _, err := windows.WaitForSingleObject(p.handle, windows.INFINITE); err != nil {

@@ -12,7 +12,7 @@ type independentProcess struct {
 	cmd *exec.Cmd
 }
 
-func startIndependent(cmd *exec.Cmd, log *os.File) (*independentProcess, *processGroup, error) {
+func startIndependent(cmd *exec.Cmd, log *os.File, _ ...string) (*independentProcess, *processGroup, error) {
 	input, err := os.Open(os.DevNull)
 	if err != nil {
 		return nil, nil, err

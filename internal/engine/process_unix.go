@@ -3,6 +3,7 @@
 package engine
 
 import (
+	"commandmanager.local/core/internal/processcontrol"
 	"errors"
 	"os"
 	"os/exec"
@@ -30,6 +31,21 @@ func (g *processGroup) stop() error {
 	return err
 }
 func (g *processGroup) close() {}
+func (g *processGroup) graceful() error {
+	err := syscall.Kill(-g.pid, syscall.SIGTERM)
+	if errors.Is(err, syscall.ESRCH) {
+		return nil
+	}
+	return err
+}
+func groupContains(state executionState, target processcontrol.Target) bool {
+	root, err := processcontrol.Observe(state.Run.PID)
+	if err != nil || root.StartedAt != state.ProcessIdentity {
+		return false
+	}
+	group, err := syscall.Getpgid(target.PID)
+	return err == nil && group == state.Run.PID
+}
 func (g *processGroup) alive() (bool, error) {
 	err := syscall.Kill(-g.pid, 0)
 	if errors.Is(err, syscall.ESRCH) {
