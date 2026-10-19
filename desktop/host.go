@@ -20,6 +20,7 @@ import (
 )
 
 type Host struct {
+	processActions      processActions
 	streams             atomic.Int32
 	URL                 string
 	server              *http.Server
@@ -162,6 +163,14 @@ func New(framework string, frontend fs.FS) (*Host, error) {
 		}
 		if r.URL.Path == "/api/resources/processes" {
 			host.serveResourcesProcesses(w, r)
+			return
+		}
+		if r.URL.Path == "/api/resources/bounties" {
+			host.serveResourcesBounties(w, r)
+			return
+		}
+		if r.URL.Path == "/api/resources/control" {
+			host.serveProcessControl(w, r)
 			return
 		}
 		if r.URL.Path == "/api/resources/ports" {

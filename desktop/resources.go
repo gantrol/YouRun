@@ -13,11 +13,14 @@ import (
 	"time"
 
 	"commandmanager.local/core/internal/engine"
+	"commandmanager.local/core/internal/processcontrol"
 	"commandmanager.local/core/internal/projectmeta"
 	"commandmanager.local/core/internal/workspace"
 )
 
 type ProcessItem struct {
+	ProcessIdentity    string                 `json:"processIdentity,omitempty"`
+	ControlRunID       string                 `json:"controlRunId,omitempty"`
 	PID                int                    `json:"pid"`
 	PPID               int                    `json:"ppid"`
 	Name               string                 `json:"name"`
@@ -53,6 +56,8 @@ type ProcessItem struct {
 }
 
 type PortItem struct {
+	ProcessIdentity    string                 `json:"processIdentity,omitempty"`
+	ControlRunID       string                 `json:"controlRunId,omitempty"`
 	ID                 string                 `json:"id"`
 	Protocol           string                 `json:"protocol"`
 	IPVersion          string                 `json:"ipVersion"`
@@ -85,6 +90,8 @@ type PortItem struct {
 }
 
 type FileHandleItem struct {
+	ProcessIdentity    string                 `json:"processIdentity,omitempty"`
+	ControlRunID       string                 `json:"controlRunId,omitempty"`
 	ID                 string                 `json:"id"`
 	PID                int                    `json:"pid"`
 	ProcessName        string                 `json:"processName"`
@@ -112,6 +119,7 @@ type FileHandleItem struct {
 }
 
 type rawProcess struct {
+	Identity           string
 	PID                int
 	PPID               int
 	Name               string
@@ -194,6 +202,7 @@ func shouldCollectProcessMetrics(ctx context.Context) bool {
 }
 
 type runAttribution struct {
+	ControlRunID  string
 	Ownership     string
 	RunID         string
 	RunStatus     string
@@ -334,6 +343,12 @@ func buildRunAttributionsFrom(ctx context.Context, dataDir string, ws *workspace
 			curr = parent
 		}
 	}
+	for pid, attr := range result {
+		if engine.ConfirmRunProcess(dataDir, attr.RunID, processcontrol.Target{PID: pid, StartedAt: processIdentity(procs[pid])}) {
+			attr.ControlRunID = attr.RunID
+			result[pid] = attr
+		}
+	}
 	return result
 }
 
@@ -433,6 +448,8 @@ func QueryProcesses(ctx context.Context, dataDir string, ws *workspace.Service) 
 			netSampling = false
 		}
 		items = append(items, ProcessItem{
+			ProcessIdentity:    processIdentity(p),
+			ControlRunID:       attr.ControlRunID,
 			PID:                p.PID,
 			PPID:               p.PPID,
 			Name:               p.Name,
@@ -485,11 +502,13 @@ func QueryProcesses(ctx context.Context, dataDir string, ws *workspace.Service) 
 	if unreadableCount > 0 {
 		coverage = "partial"
 	}
+	bountySnap := recordBountyObservation(ctx, dataDir, items, time.Now().UTC())
 	return map[string]any{
 		"observedAt":             now,
 		"coverage":               coverage,
 		"unreadableProcessCount": unreadableCount,
 		"items":                  items,
+		"bounty":                 bountySnap,
 	}, nil
 }
 
@@ -549,6 +568,8 @@ func QueryPorts(ctx context.Context, dataDir string, ws *workspace.Service) (map
 		}
 		seen[rowID] = true
 		items = append(items, PortItem{
+			ProcessIdentity:    processIdentity(proc),
+			ControlRunID:       attr.ControlRunID,
 			ID:                 rowID,
 			Protocol:           rp.Protocol,
 			IPVersion:          rp.IPVersion,
@@ -660,6 +681,8 @@ func QueryFiles(ctx context.Context, dataDir string, ws *workspace.Service, clea
 			cmdState = "unavailable"
 		}
 		items = append(items, FileHandleItem{
+			ProcessIdentity:    processIdentity(proc),
+			ControlRunID:       attr.ControlRunID,
 			ID:                 rh.ID,
 			PID:                rh.PID,
 			ProcessName:        procName,

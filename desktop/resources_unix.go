@@ -4,6 +4,7 @@ package desktop
 
 import (
 	"bytes"
+	"commandmanager.local/core/internal/processcontrol"
 	"context"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type rawFileHandle struct {
@@ -68,7 +70,11 @@ func collectOSProcesses(ctx context.Context) (map[int]rawProcess, error) {
 		if args == "" {
 			cmdState = "unavailable"
 		}
+		identity, _ := processcontrol.Observe(pid)
+		startedAt, _ := time.Parse(time.RFC3339Nano, identity.StartedAt)
 		result[pid] = rawProcess{
+			Identity:         identity.StartedAt,
+			StartedAt:        startedAt,
 			PID:              pid,
 			PPID:             ppid,
 			Name:             name,

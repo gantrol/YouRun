@@ -17,6 +17,9 @@ import (
 // Misspelled commands must fail through the CLI instead of opening a window.
 func CommandLine() (handled bool, exitCode int) {
 	args := filterPlatformArgs(runtime.GOOS, os.Args[1:])
+	if handled, code := processControlHelper(args); handled {
+		return true, code
+	}
 	if len(args) == 0 {
 		return false, 0
 	}
