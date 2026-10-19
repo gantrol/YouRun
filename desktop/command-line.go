@@ -24,6 +24,7 @@ func CommandLine() (handled bool, exitCode int) {
 		return false, 0
 	}
 	RegisterCLIResourceHandler()
+	defer CloseResourceMetrics()
 	return true, cli.Main(args)
 }
 

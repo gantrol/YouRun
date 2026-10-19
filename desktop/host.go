@@ -292,6 +292,7 @@ func (h *Host) Close() {
 		}
 	}
 	h.server.Close()
+	CloseResourceMetrics()
 }
 
 func (h *Host) SetDirectoryPicker(picker func() (string, error)) {

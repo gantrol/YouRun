@@ -160,11 +160,14 @@ type cpuSampleKey struct {
 
 type cpuSampleVal struct {
 	total100ns   uint64
-	ioBytes      uint64
 	lastCPUPct   float64
-	lastNetRate  float64
 	hasLastRates bool
 	sampledAt    time.Time
+}
+
+// CloseResourceMetrics releases OS samplers without affecting managed commands.
+func CloseResourceMetrics() {
+	closeOSNetworkMetrics()
 }
 
 var (
@@ -442,11 +445,6 @@ func QueryProcesses(ctx context.Context, dataDir string, ws *workspace.Service) 
 		connCount := connCountByPID[p.PID]
 		netRate := p.NetworkBytesPerSec
 		netSampling := p.NetworkSampling
-		if connCount == 0 {
-			zero := 0.0
-			netRate = &zero
-			netSampling = false
-		}
 		items = append(items, ProcessItem{
 			ProcessIdentity:    processIdentity(p),
 			ControlRunID:       attr.ControlRunID,

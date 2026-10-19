@@ -11,5 +11,7 @@ import (
 
 func main() {
 	desktop.RegisterCLIResourceHandler()
-	os.Exit(cli.Main(os.Args[1:]))
+	code := cli.Main(os.Args[1:])
+	desktop.CloseResourceMetrics()
+	os.Exit(code)
 }

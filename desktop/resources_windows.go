@@ -50,7 +50,6 @@ var (
 	modGdi32    = windows.NewLazySystemDLL("gdi32.dll")
 	modPdh      = windows.NewLazySystemDLL("pdh.dll")
 
-	procGetProcessIoCounters      = modKernel32.NewProc("GetProcessIoCounters")
 	procGetProcessMemoryInfo      = modPsapi.NewProc("GetProcessMemoryInfo")
 	procNtQueryInformationProcess = modNtdll.NewProc("NtQueryInformationProcess")
 	procGetExtendedTcpTable       = modIphlpapi.NewProc("GetExtendedTcpTable")
@@ -418,15 +417,6 @@ func queryProcessUser(handle windows.Handle) string {
 	return account
 }
 
-type processIoCounters struct {
-	ReadOperationCount  uint64
-	WriteOperationCount uint64
-	OtherOperationCount uint64
-	ReadTransferCount   uint64
-	WriteTransferCount  uint64
-	OtherTransferCount  uint64
-}
-
 type pdhRawCounter struct {
 	CStatus       uint32
 	TimeStampLow  uint32
@@ -673,15 +663,9 @@ func primeProcessMetricsBaseline(ctx context.Context) {
 			startedNs := created.Nanoseconds()
 			total100ns := (uint64(kernel.HighDateTime)<<32 | uint64(kernel.LowDateTime)) +
 				(uint64(user.HighDateTime)<<32 | uint64(user.LowDateTime))
-			var ioCnt processIoCounters
-			var ioBytes uint64
-			if r1, _, _ := procGetProcessIoCounters.Call(uintptr(h), uintptr(unsafe.Pointer(&ioCnt))); r1 != 0 {
-				ioBytes = ioCnt.ReadTransferCount + ioCnt.WriteTransferCount + ioCnt.OtherTransferCount
-			}
 			key := cpuSampleKey{pid: pid, startedNs: startedNs}
 			cpuSamples[key] = cpuSampleVal{
 				total100ns: total100ns,
-				ioBytes:    ioBytes,
 				sampledAt:  now,
 			}
 		}
@@ -702,6 +686,7 @@ func collectOSProcesses(ctx context.Context) (map[int]rawProcess, error) {
 	includeIcon := !shouldSkipProcessIcons(ctx)
 	collectMetrics := shouldCollectProcessMetrics(ctx)
 	if collectMetrics {
+		primeOSNetworkMetrics()
 		primeProcessMetricsBaseline(ctx)
 	}
 
@@ -778,14 +763,7 @@ func collectOSProcesses(ctx context.Context) (map[int]rawProcess, error) {
 			rp.WorkingSet(&mem)
 		}
 
-		// IO transfer bytes
-		var ioCnt processIoCounters
-		var ioBytes uint64
-		if r1, _, _ := procGetProcessIoCounters.Call(uintptr(h), uintptr(unsafe.Pointer(&ioCnt))); r1 != 0 {
-			ioBytes = ioCnt.ReadTransferCount + ioCnt.WriteTransferCount + ioCnt.OtherTransferCount
-		}
-
-		// Process times, CPU %, and Network IO rate
+		// Process times and CPU %. Network bytes are sampled separately from ETW.
 		var created, exited, kernel, user windows.Filetime
 		if tErr := windows.GetProcessTimes(h, &created, &exited, &kernel, &user); tErr == nil {
 			startedNs := created.Nanoseconds()
@@ -800,15 +778,12 @@ func collectOSProcesses(ctx context.Context) (map[int]rawProcess, error) {
 			if !hasPrev {
 				cpuSamples[key] = cpuSampleVal{
 					total100ns: total100ns,
-					ioBytes:    ioBytes,
 					sampledAt:  now,
 				}
 				rp.CPUSampling = true
-				rp.NetworkSampling = true
 			} else {
 				elapsed := now.Sub(prev.sampledAt)
 				if elapsed >= 120*time.Millisecond {
-					elapsedSec := elapsed.Seconds()
 					elapsed100ns := float64(elapsed.Nanoseconds()) / 100.0
 					var delta uint64
 					if total100ns >= prev.total100ns {
@@ -821,32 +796,18 @@ func collectOSProcesses(ctx context.Context) (map[int]rawProcess, error) {
 					if pct > 100 {
 						pct = 100
 					}
-					var ioDelta uint64
-					if ioBytes >= prev.ioBytes {
-						ioDelta = ioBytes - prev.ioBytes
-					}
-					netRate := 0.0
-					if elapsedSec > 0 {
-						netRate = float64(ioDelta) / elapsedSec
-					}
 					rp.CPUPercent = &pct
-					rp.NetworkBytesPerSec = &netRate
 					cpuSamples[key] = cpuSampleVal{
 						total100ns:   total100ns,
-						ioBytes:      ioBytes,
 						lastCPUPct:   pct,
-						lastNetRate:  netRate,
 						hasLastRates: true,
 						sampledAt:    now,
 					}
 				} else if prev.hasLastRates {
 					pct := prev.lastCPUPct
-					netRate := prev.lastNetRate
 					rp.CPUPercent = &pct
-					rp.NetworkBytesPerSec = &netRate
 				} else {
 					rp.CPUSampling = true
-					rp.NetworkSampling = true
 				}
 			}
 			cpuSamplesMu.Unlock()
@@ -884,6 +845,9 @@ func collectOSProcesses(ctx context.Context) (map[int]rawProcess, error) {
 	}
 	cpuSamplesMu.Unlock()
 
+	if collectMetrics {
+		collectOSNetworkMetrics(result)
+	}
 	return result, nil
 }
 
