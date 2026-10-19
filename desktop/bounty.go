@@ -112,8 +112,9 @@ type BountyWatch struct {
 }
 
 type bountyPersistedState struct {
-	Events  []BountyEvent `json:"events"`
-	Watches []BountyWatch `json:"watches"`
+	NetworkMetricsVersion int           `json:"networkMetricsVersion,omitempty"`
+	Events                []BountyEvent `json:"events"`
+	Watches               []BountyWatch `json:"watches"`
 }
 
 type BountySnapshot struct {
@@ -200,6 +201,32 @@ func ensureBountyStateLoadedLocked(ctx context.Context, dataDir string) {
 	}
 	if st.Watches == nil {
 		st.Watches = []BountyWatch{}
+	}
+	if st.NetworkMetricsVersion < 1 {
+		// Older Windows versions recorded all process I/O as network traffic.
+		// Keep other categories and watch definitions, but invalidate those
+		// network peaks, embedded estimates and derived watch-hit counters.
+		events := make([]BountyEvent, 0, len(st.Events))
+		for _, event := range st.Events {
+			if event.Category == "network" {
+				continue
+			}
+			event.NetworkBytesPerSec = nil
+			event.CumulativeBytes = 0
+			events = append(events, event)
+		}
+		st.Events = events
+		for i := range st.Watches {
+			watch := &st.Watches[i]
+			if watch.Category == "network" {
+				watch.HitCount, watch.LastPID = 0, 0
+				watch.LastTriggeredAt, watch.LastPeakValue, watch.UnreadHit = "", 0, false
+			}
+		}
+		st.NetworkMetricsVersion = 1
+		if err := store.WriteSetting(ctx, bountySettingKey, st); err != nil {
+			return
+		}
 	}
 	bountyStateCache = st
 	bountyLoadedDir = dataDir
