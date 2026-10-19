@@ -29,6 +29,8 @@ export async function api<T>(
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: signal
         ? AbortSignal.any([signal, AbortSignal.timeout(15000)])
+        : path === "resources/control"
+          ? AbortSignal.timeout(135000)
         : path === "choose-directory" || path === "project-avatar" || path === "updates/source"
           ? undefined
           : AbortSignal.timeout(15000),

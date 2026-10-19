@@ -27,6 +27,19 @@ export function DropdownMenuItem({ className, ...props }: ComponentProps<typeof 
   return <Menu.Item className={cn(menuItemClassName, className)} {...props} />;
 }
 
+export function DropdownMenuLabel({ className, ...props }: ComponentProps<typeof Menu.Label>) {
+  return (
+    <Menu.Label
+      className={cn(
+        "px-2 py-1.5 text-xs font-medium text-muted-foreground [overflow-wrap:anywhere]",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 export function DropdownMenuSeparator() {
   return <Menu.Separator className="my-1 h-px bg-border" />;
 }
+
