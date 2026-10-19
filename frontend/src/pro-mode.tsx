@@ -4,22 +4,50 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  Bell,
+  Check,
   ChevronDown,
   ChevronRight,
   Copy,
   FileSearch,
   FileText,
   FolderOpen,
+  ListFilter,
+  Plus,
   RefreshCw,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
 import { Button } from "@/renderer/components/ui/button";
 import { Input } from "@/renderer/components/ui/input";
 import { Checkbox } from "@/renderer/components/ui/checkbox";
-import { Picker } from "./controls";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/renderer/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/renderer/components/ui/dropdown-menu";
 import { api } from "./api";
+import {
+  ResourceActionsProvider,
+  ResourceActions,
+  ResourceBatchActions,
+  ResourceMenu,
+  ResourceRow,
+  ResourceSelectAll,
+  type ResourceProcess,
+} from "./resource-actions";
 import type { Command, Project, Run, SourceSnapshot } from "./model";
+import type { RunOperations } from "./models/run-operation";
 import type { ProjectDetails } from "./project-details";
 import type { Messages } from "./messages";
 import { formatSourceSummary } from "./project-workspaces";
@@ -27,7 +55,102 @@ import { YouRunLogo } from "./yourun-logo";
 
 export type ProSubview = "home" | "processes" | "ports" | "files";
 
+export type BountyBoardMode = "live" | "peaks" | "watch";
+
+export type BountyGroupSummary = {
+  groupKey: string;
+  windowCpu: number | null;
+  windowMemory: number;
+  windowGpu: number | null;
+  windowGpuMemory: number;
+  windowNetwork: number | null;
+  cumulativeNetBytes: number;
+  cpuDelta?: number;
+  memoryDeltaBytes?: number;
+  gpuDelta?: number;
+  networkDeltaBps?: number;
+  risingCategories?: string[];
+  watched?: boolean;
+  watchTriggered?: boolean;
+};
+
+export type BountyEvent = {
+  id: string;
+  groupKey: string;
+  category: "cpu" | "memory" | "gpu" | "network";
+  reasonKind: "rapid_rise" | "peak_high" | "watch_triggered" | string;
+  watchId?: string;
+  title: string;
+  processName: string;
+  icon?: string;
+  pid: number;
+  processIdentity?: string;
+  controlRunId?: string;
+  executable?: string;
+  commandLine?: string;
+  commandLineState?: string;
+  ownership: string;
+  runId?: string;
+  runStatus?: string;
+  commandId?: string;
+  commandTitle?: string;
+  projectId?: string;
+  projectName?: string;
+  workspaceId?: string;
+  workspaceName?: string;
+  directory?: string;
+  ports?: number[];
+  peakValue: number;
+  baselineValue?: number;
+  deltaValue?: number;
+  cumulativeBytes?: number;
+  memoryBytes?: number;
+  cpuPercent?: number | null;
+  gpuPercent?: number | null;
+  gpuMemoryBytes?: number;
+  networkBytesPerSec?: number | null;
+  networkConnections?: number;
+  firstObservedAt: string;
+  peakAt: string;
+  lastObservedAt: string;
+  durationSec: number;
+  processExited?: boolean;
+  acknowledged?: boolean;
+};
+
+export type BountyWatch = {
+  id: string;
+  title: string;
+  matchKind: "process" | "command" | string;
+  targetName: string;
+  executable?: string;
+  commandId?: string;
+  projectId?: string;
+  projectName?: string;
+  category: "network" | "cpu" | "memory" | "gpu";
+  conditionKind: "threshold" | "rapid_rise" | "cumulative";
+  threshold: number;
+  notifyToast: boolean;
+  enabled: boolean;
+  note?: string;
+  createdAt: string;
+  hitCount: number;
+  lastTriggeredAt?: string;
+  lastPeakValue?: number;
+  lastPid?: number;
+  unreadHit?: boolean;
+};
+
+export type BountySnapshot = {
+  groups: Record<string, BountyGroupSummary>;
+  events: BountyEvent[];
+  watches: BountyWatch[];
+  unreadAlertCount: number;
+};
+
 export type ProcessItem = {
+  processIdentity?: string;
+  controlRunId?: string;
   pid: number;
   ppid: number;
   name: string;
@@ -63,6 +186,8 @@ export type ProcessItem = {
 };
 
 export type PortItem = {
+  processIdentity?: string;
+  controlRunId?: string;
   id: string;
   protocol: string;
   ipVersion: string;
@@ -95,6 +220,8 @@ export type PortItem = {
 };
 
 export type FileHandleItem = {
+  processIdentity?: string;
+  controlRunId?: string;
   id: string;
   pid: number;
   processName: string;
@@ -126,6 +253,7 @@ export type ResourceOriginContext = {
   label: string;
   runId: string;
   runTitle: string;
+  commandId?: string;
   projectId?: string;
   projectName?: string;
   workspaceId?: string;
@@ -188,7 +316,7 @@ export function createInitialProModeState(): ProModeState {
   };
 }
 
-function formatMemory(bytes: number): string {
+function formatMemory(bytes?: number): string {
   if (!bytes || bytes <= 0) return "--";
   const mb = bytes / (1024 * 1024);
   if (mb >= 1024) {
@@ -222,10 +350,12 @@ function BountyRabbitBadge({
   rank,
   m,
   selected = false,
+  iconOnly = false,
 }: {
   rank: 1 | 2 | 3;
   m: Messages;
   selected?: boolean;
+  iconOnly?: boolean;
 }) {
   const meta =
     rank === 1
@@ -257,7 +387,11 @@ function BountyRabbitBadge({
 
   return (
     <span
-      className={`inline-flex h-5 shrink-0 items-center gap-1 border px-1.5 text-[11px] font-medium leading-none ${meta.cls}`}
+      title={iconOnly ? meta.label : undefined}
+      aria-label={iconOnly ? meta.label : undefined}
+      className={`inline-flex h-5 shrink-0 items-center border text-[11px] font-medium leading-none ${
+        iconOnly ? "w-5 justify-center" : "gap-1 px-1.5"
+      } ${meta.cls}`}
       style={
         {
           "--yourun-logo-fill": meta.fill,
@@ -266,7 +400,7 @@ function BountyRabbitBadge({
       }
     >
       <YouRunLogo className="size-3.5 shrink-0" />
-      <span>{meta.label}</span>
+      {!iconOnly && <span>{meta.label}</span>}
     </span>
   );
 }
@@ -378,10 +512,136 @@ type ProcessGroup = {
   totalNetwork: number | null;
   networkSampling: boolean;
   totalNetworkConnections: number;
+  windowCpu: number | null;
+  windowMemory: number;
+  windowGpu: number | null;
+  windowGpuMemory: number;
+  windowNetwork: number | null;
+  cumulativeNetBytes: number;
+  cpuDelta: number;
+  memoryDeltaBytes: number;
+  gpuDelta: number;
+  networkDeltaBps: number;
+  risingCategories: string[];
+  watched: boolean;
+  watchTriggered: boolean;
   ownership: string;
   projectName?: string;
   workspaceName?: string;
 };
+
+const BOUNTY_WINDOW_MS = 30_000;
+const BOUNTY_POLL_INTERVAL_MS = 2_000;
+
+function getProcessGroupKey(item: ProcessItem): string {
+  const label = friendlyProcessLabel(item.name, item.displayName);
+  return item.ownership === "managed"
+    ? `managed:${item.runId || item.pid}:${label.toLowerCase()}`
+    : `ext:${label.toLowerCase()}`;
+}
+
+function defaultThresholdFor(
+  category: "network" | "cpu" | "memory" | "gpu",
+  conditionKind: "threshold" | "rapid_rise" | "cumulative",
+): number {
+  if (category === "network") {
+    if (conditionKind === "cumulative") return 100 * 1024 * 1024; // 100 MB
+    if (conditionKind === "rapid_rise") return 2 * 1024 * 1024; // +2 MB/s
+    return 5 * 1024 * 1024; // 5 MB/s
+  }
+  if (category === "memory") {
+    if (conditionKind === "rapid_rise") return 256 * 1024 * 1024; // +256 MB
+    return 1024 * 1024 * 1024; // 1 GB
+  }
+  if (conditionKind === "rapid_rise") return 30; // +30%
+  return 50; // 50%
+}
+
+function thresholdPresetsFor(
+  category: "network" | "cpu" | "memory" | "gpu",
+  conditionKind: "threshold" | "rapid_rise" | "cumulative",
+  m: Messages,
+): Array<{ value: number; label: string }> {
+  if (category === "network") {
+    if (conditionKind === "cumulative") {
+      return [
+        { value: 50 * 1024 * 1024, label: "50 MB" },
+        { value: 100 * 1024 * 1024, label: "100 MB" },
+        { value: 500 * 1024 * 1024, label: "500 MB" },
+        { value: 2 * 1024 * 1024 * 1024, label: "2 GB" },
+      ];
+    }
+    if (conditionKind === "rapid_rise") {
+      return [
+        { value: 1 * 1024 * 1024, label: `+1 ${m.networkUnitMBps}` },
+        { value: 2 * 1024 * 1024, label: `+2 ${m.networkUnitMBps}` },
+        { value: 5 * 1024 * 1024, label: `+5 ${m.networkUnitMBps}` },
+        { value: 10 * 1024 * 1024, label: `+10 ${m.networkUnitMBps}` },
+      ];
+    }
+    return [
+      { value: 1 * 1024 * 1024, label: `1 ${m.networkUnitMBps}` },
+      { value: 5 * 1024 * 1024, label: `5 ${m.networkUnitMBps}` },
+      { value: 10 * 1024 * 1024, label: `10 ${m.networkUnitMBps}` },
+      { value: 25 * 1024 * 1024, label: `25 ${m.networkUnitMBps}` },
+    ];
+  }
+  if (category === "memory") {
+    if (conditionKind === "rapid_rise") {
+      return [
+        { value: 128 * 1024 * 1024, label: "+128 MB" },
+        { value: 256 * 1024 * 1024, label: "+256 MB" },
+        { value: 512 * 1024 * 1024, label: "+512 MB" },
+        { value: 1024 * 1024 * 1024, label: "+1.0 GB" },
+      ];
+    }
+    return [
+      { value: 512 * 1024 * 1024, label: "512 MB" },
+      { value: 1024 * 1024 * 1024, label: "1.0 GB" },
+      { value: 2 * 1024 * 1024 * 1024, label: "2.0 GB" },
+      { value: 4 * 1024 * 1024 * 1024, label: "4.0 GB" },
+    ];
+  }
+  if (conditionKind === "rapid_rise") {
+    return [
+      { value: 20, label: "+20%" },
+      { value: 30, label: "+30%" },
+      { value: 50, label: "+50%" },
+    ];
+  }
+  return [
+    { value: 30, label: "30%" },
+    { value: 50, label: "50%" },
+    { value: 80, label: "80%" },
+    { value: 90, label: "90%" },
+  ];
+}
+
+function formatWatchRuleSummary(w: BountyWatch, m: Messages): string {
+  const catLabel =
+    w.category === "cpu"
+      ? m.colCpu
+      : w.category === "memory"
+        ? m.colMemory
+        : w.category === "gpu"
+          ? m.colGpu
+          : m.colNetwork;
+  const valStr =
+    w.category === "network"
+      ? w.conditionKind === "cumulative"
+        ? formatMemory(w.threshold)
+        : formatNetworkRate(w.threshold, false, m)
+      : w.category === "memory"
+        ? formatMemory(w.threshold)
+        : `${w.threshold.toFixed(0)}%`;
+  if (w.conditionKind === "rapid_rise") {
+    return `${catLabel} · ${m.bountyConditionRapidRise} +${valStr}`;
+  }
+  if (w.conditionKind === "cumulative") {
+    return `${catLabel} · ${m.bountyConditionCumulative} ${valStr}`;
+  }
+  return `${catLabel} · > ${valStr}`;
+}
 
 export function ProModeWorkspace({
   state,
@@ -389,9 +649,15 @@ export function ProModeWorkspace({
   projects,
   projectDetails,
   runs,
+  commands,
+  runOperations,
+  launchErrors,
   locale,
   m,
   onOpenRun,
+  onOpenCommand,
+  onReplay,
+  onStop,
   onOpenWorkspace,
   onCopy,
   onOpenDirectoryPath,
@@ -403,9 +669,14 @@ export function ProModeWorkspace({
   projectDetails: Record<string, ProjectDetails | undefined>;
   runs: Run[];
   commands: Command[];
+  runOperations: RunOperations;
+  launchErrors: Record<string, string>;
   locale: string;
   m: Messages;
   onOpenRun: (runId: string, origin?: ResourceOriginContext) => void;
+  onOpenCommand: (commandId: string, origin: ResourceOriginContext) => void;
+  onReplay: (id: string) => Promise<void>;
+  onStop: (id: string) => Promise<void>;
   onOpenWorkspace: (projectId: string, workspaceId?: string) => void;
   onCopy: (text: string) => void;
   onOpenDirectoryPath: (dirPath: string) => void;
@@ -417,6 +688,41 @@ export function ProModeWorkspace({
     coverage?: string;
     unreadableProcessCount?: number;
   }>({ items: [] });
+  const [bountySamples, setBountySamples] = useState<
+    Array<{ at: number; items: ProcessItem[] }>
+  >([]);
+  const [bountyMode, setBountyMode] = useState<BountyBoardMode>("live");
+  const [bountyData, setBountyData] = useState<BountySnapshot>({
+    groups: {},
+    events: [],
+    watches: [],
+    unreadAlertCount: 0,
+  });
+  const [selectedPeakEventId, setSelectedPeakEventId] = useState<string | undefined>(undefined);
+  const [watchDialogOpen, setWatchDialogOpen] = useState(false);
+  const [watchDraft, setWatchDraft] = useState<{
+    title: string;
+    matchKind: "process" | "command";
+    targetName: string;
+    executable?: string;
+    commandId?: string;
+    projectId?: string;
+    projectName?: string;
+    category: "network" | "cpu" | "memory" | "gpu";
+    conditionKind: "threshold" | "rapid_rise" | "cumulative";
+    threshold: number;
+    notifyToast: boolean;
+  }>({
+    title: "",
+    matchKind: "process",
+    targetName: "",
+    category: "network",
+    conditionKind: "threshold",
+    threshold: 5 * 1024 * 1024,
+    notifyToast: false,
+  });
+  const notifiedWatchRef = useRef<Record<string, string>>({});
+
   const [portData, setPortData] = useState<{
     items: PortItem[];
     observedAt?: string;
@@ -436,33 +742,211 @@ export function ProModeWorkspace({
   const [narrowDetailOpen, setNarrowDetailOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const pickingRef = useRef(false);
+  const procFetchingRef = useRef(false);
 
   const toggleGroup = useCallback((groupKey: string) => {
     setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
   }, []);
 
-  const loadProcesses = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await api<{
-        items: ProcessItem[];
-        observedAt: string;
-        coverage?: string;
-        unreadableProcessCount?: number;
-      }>("resources/processes");
-      setProcData({
-        items: res.items ?? [],
-        observedAt: res.observedAt,
-        coverage: res.coverage,
-        unreadableProcessCount: res.unreadableProcessCount,
+  const applyBountySnapshot = useCallback(
+    (snap?: BountySnapshot) => {
+      if (!snap) return;
+      setBountyData({
+        groups: snap.groups ?? {},
+        events: snap.events ?? [],
+        watches: snap.watches ?? [],
+        unreadAlertCount: snap.unreadAlertCount ?? 0,
       });
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        for (const w of snap.watches ?? []) {
+          if (
+            w.enabled &&
+            w.notifyToast &&
+            w.unreadHit &&
+            w.lastTriggeredAt &&
+            notifiedWatchRef.current[w.id] !== w.lastTriggeredAt
+          ) {
+            notifiedWatchRef.current[w.id] = w.lastTriggeredAt;
+            try {
+              new Notification(
+                m.bountyAlertBanner.replace("%s", w.title || w.targetName),
+                {
+                  body: formatWatchRuleSummary(w, m),
+                },
+              );
+            } catch {
+              // ignore notification error in restricted webview
+            }
+          }
+        }
+      }
+    },
+    [m],
+  );
+
+  const loadProcesses = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (procFetchingRef.current) return;
+      procFetchingRef.current = true;
+      const silent = options?.silent === true;
+      if (!silent) {
+        setLoading(true);
+        setError("");
+      }
+      try {
+        const res = await api<{
+          items: ProcessItem[];
+          observedAt: string;
+          coverage?: string;
+          unreadableProcessCount?: number;
+          bounty?: BountySnapshot;
+        }>("resources/processes");
+        const items = res.items ?? [];
+        const now = Date.now();
+        setProcData({
+          items,
+          observedAt: res.observedAt,
+          coverage: res.coverage,
+          unreadableProcessCount: res.unreadableProcessCount,
+        });
+        if (res.bounty) {
+          applyBountySnapshot(res.bounty);
+        }
+        setBountySamples((prev) => {
+          const cutoff = now - BOUNTY_WINDOW_MS;
+          const kept = prev.filter((s) => s.at >= cutoff);
+          return [...kept, { at: now, items }];
+        });
+      } catch {
+        if (!silent) {
+          setError(m.requestFailed);
+        }
+      } finally {
+        procFetchingRef.current = false;
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [m.requestFailed, applyBountySnapshot],
+  );
+
+  const openWatchDialogFor = useCallback(
+    (target?: {
+      title?: string;
+      name?: string;
+      executable?: string;
+      commandId?: string;
+      projectId?: string;
+      projectName?: string;
+      defaultCategory?: "network" | "cpu" | "memory" | "gpu";
+    }) => {
+      const cat = target?.defaultCategory ?? "network";
+      const label = target?.title || (target?.name ? friendlyProcessLabel(target.name, target.title) : "");
+      setWatchDraft({
+        title: label,
+        matchKind: target?.commandId ? "command" : "process",
+        targetName: label || target?.name || "",
+        executable: target?.executable,
+        commandId: target?.commandId,
+        projectId: target?.projectId,
+        projectName: target?.projectName,
+        category: cat,
+        conditionKind: "threshold",
+        threshold: defaultThresholdFor(cat, "threshold"),
+        notifyToast: false,
+      });
+      setWatchDialogOpen(true);
+    },
+    [],
+  );
+
+  const submitWatchDraft = useCallback(async () => {
+    const targetName = watchDraft.targetName.trim();
+    if (!targetName) return;
+    try {
+      const snap = await api<BountySnapshot>("resources/bounties", "POST", {
+        action: "create_watch",
+        title: watchDraft.title.trim() || targetName,
+        matchKind: watchDraft.matchKind,
+        targetName,
+        executable: watchDraft.executable,
+        commandId: watchDraft.commandId,
+        projectId: watchDraft.projectId,
+        projectName: watchDraft.projectName,
+        category: watchDraft.category,
+        conditionKind: watchDraft.conditionKind,
+        threshold: watchDraft.threshold,
+        notifyToast: watchDraft.notifyToast,
+      });
+      applyBountySnapshot(snap);
+      setWatchDialogOpen(false);
     } catch {
       setError(m.requestFailed);
-    } finally {
-      setLoading(false);
     }
-  }, [m.requestFailed]);
+  }, [watchDraft, applyBountySnapshot, m.requestFailed]);
+
+  const handleToggleWatch = useCallback(
+    async (id: string, enabled: boolean) => {
+      try {
+        const snap = await api<BountySnapshot>("resources/bounties", "POST", {
+          action: "toggle_watch",
+          id,
+          enabled,
+        });
+        applyBountySnapshot(snap);
+      } catch {
+        setError(m.requestFailed);
+      }
+    },
+    [applyBountySnapshot, m.requestFailed],
+  );
+
+  const handleDeleteWatch = useCallback(
+    async (id: string) => {
+      try {
+        const snap = await api<BountySnapshot>("resources/bounties", "POST", {
+          action: "delete_watch",
+          id,
+        });
+        applyBountySnapshot(snap);
+      } catch {
+        setError(m.requestFailed);
+      }
+    },
+    [applyBountySnapshot, m.requestFailed],
+  );
+
+  const handleAckAlerts = useCallback(
+    async (id?: string) => {
+      try {
+        const snap = await api<BountySnapshot>("resources/bounties", "POST", {
+          action: "ack_alerts",
+          id,
+        });
+        applyBountySnapshot(snap);
+      } catch {
+        setError(m.requestFailed);
+      }
+    },
+    [applyBountySnapshot, m.requestFailed],
+  );
+
+  const handleClearPeaks = useCallback(
+    async (category?: string) => {
+      try {
+        const snap = await api<BountySnapshot>("resources/bounties", "POST", {
+          action: "clear_events",
+          category,
+        });
+        applyBountySnapshot(snap);
+        setSelectedPeakEventId(undefined);
+      } catch {
+        setError(m.requestFailed);
+      }
+    },
+    [applyBountySnapshot, m.requestFailed],
+  );
 
   const loadPorts = useCallback(async () => {
     setLoading(true);
@@ -558,6 +1042,24 @@ export function ProModeWorkspace({
     loadFiles,
   ]);
 
+  useEffect(() => {
+    if (state.subview !== "home") return;
+    if (state.origin?.subview === "home" && state.origin?.reviewStatus === "stale") return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      await loadProcesses({ silent: true });
+      if (!cancelled) {
+        timer = setTimeout(() => void poll(), BOUNTY_POLL_INTERVAL_MS);
+      }
+    };
+    timer = setTimeout(() => void poll(), BOUNTY_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, [state.subview, state.origin?.subview, state.origin?.reviewStatus, loadProcesses]);
+
   const handleRefresh = useCallback(() => {
     if (state.origin && state.origin.subview === state.subview && state.origin.reviewStatus === "stale") {
       onStateChange((prev) => ({
@@ -566,11 +1068,11 @@ export function ProModeWorkspace({
       }));
     }
     if (state.subview === "home" || state.subview === "processes") {
-      void loadProcesses();
+      return loadProcesses();
     } else if (state.subview === "ports") {
-      void loadPorts();
+      return loadPorts();
     } else if (state.subview === "files" && state.files.targetPath.trim()) {
-      void loadFiles(state.files.targetPath, state.files.recursive);
+      return loadFiles(state.files.targetPath, state.files.recursive);
     }
   }, [state.subview, state.origin, state.files.targetPath, state.files.recursive, loadProcesses, loadPorts, loadFiles, onStateChange]);
 
@@ -670,17 +1172,125 @@ export function ProModeWorkspace({
     });
   }, [procData.items, state.processes, state.subview]);
 
+  const windowGroupStats = useMemo(() => {
+    const acc = new Map<
+      string,
+      {
+        cpuSum: number;
+        cpuCount: number;
+        memSum: number;
+        memCount: number;
+        gpuSum: number;
+        gpuCount: number;
+        gpuMemSum: number;
+        gpuMemCount: number;
+        netSum: number;
+        netCount: number;
+      }
+    >();
+
+    for (const sample of bountySamples) {
+      const perSample = new Map<
+        string,
+        {
+          cpu: number;
+          hasCpu: boolean;
+          mem: number;
+          gpu: number;
+          hasGpu: boolean;
+          gpuMem: number;
+          net: number;
+          hasNet: boolean;
+        }
+      >();
+
+      for (const item of sample.items) {
+        if (state.processes.project !== "all" && item.projectId !== state.processes.project) {
+          continue;
+        }
+        if (state.processes.workspace !== "all" && item.workspaceId !== state.processes.workspace) {
+          continue;
+        }
+        if (state.processes.ownership !== "all" && item.ownership !== state.processes.ownership) {
+          continue;
+        }
+        const key = getProcessGroupKey(item);
+        let entry = perSample.get(key);
+        if (!entry) {
+          entry = {
+            cpu: 0,
+            hasCpu: false,
+            mem: 0,
+            gpu: 0,
+            hasGpu: false,
+            gpuMem: 0,
+            net: 0,
+            hasNet: false,
+          };
+          perSample.set(key, entry);
+        }
+        entry.mem += item.memoryBytes || 0;
+        if (item.cpuPercent != null) {
+          entry.cpu += item.cpuPercent;
+          entry.hasCpu = true;
+        }
+        if (item.gpuPercent != null) {
+          entry.gpu += item.gpuPercent;
+          entry.hasGpu = true;
+        }
+        entry.gpuMem += item.gpuMemoryBytes || 0;
+        if (item.networkBytesPerSec != null) {
+          entry.net += item.networkBytesPerSec;
+          entry.hasNet = true;
+        }
+      }
+
+      for (const [key, entry] of perSample.entries()) {
+        let total = acc.get(key);
+        if (!total) {
+          total = {
+            cpuSum: 0,
+            cpuCount: 0,
+            memSum: 0,
+            memCount: 0,
+            gpuSum: 0,
+            gpuCount: 0,
+            gpuMemSum: 0,
+            gpuMemCount: 0,
+            netSum: 0,
+            netCount: 0,
+          };
+          acc.set(key, total);
+        }
+        if (entry.hasCpu) {
+          total.cpuSum += Math.min(100, entry.cpu);
+          total.cpuCount += 1;
+        }
+        total.memSum += entry.mem;
+        total.memCount += 1;
+        if (entry.hasGpu) {
+          total.gpuSum += Math.min(100, entry.gpu);
+          total.gpuCount += 1;
+        }
+        total.gpuMemSum += entry.gpuMem;
+        total.gpuMemCount += 1;
+        if (entry.hasNet) {
+          total.netSum += entry.net;
+          total.netCount += 1;
+        }
+      }
+    }
+
+    return acc;
+  }, [bountySamples, state.processes.project, state.processes.workspace, state.processes.ownership]);
+
   const processGroups = useMemo<ProcessGroup[]>(() => {
     const q = state.subview === "processes" ? state.processes.query.trim().toLowerCase() : "";
     const isNumeric = /^\d+$/.test(q);
     const map = new Map<string, ProcessItem[]>();
 
     for (const item of filteredProcesses) {
-      const label = friendlyProcessLabel(item.name, item.displayName);
-      const key =
-        item.ownership === "managed"
-          ? `managed:${item.runId || item.pid}:${label.toLowerCase()}`
-          : `ext:${label.toLowerCase()}`;
+      const key = getProcessGroupKey(item);
       const existing = map.get(key);
       if (existing) {
         existing.push(item);
@@ -732,21 +1342,47 @@ export function ProModeWorkspace({
         }
         totalNetworkConnections += item.networkConnections || 0;
       }
+      const totalCpu = hasCpu ? Math.min(100, totalCpuSum) : null;
+      const totalGpu = hasGpu ? Math.min(100, totalGpuSum) : null;
+      const totalNetwork = hasNetwork ? totalNetworkSum : null;
+      const win = windowGroupStats.get(key);
+      const backendSummary = bountyData.groups[key];
+      const fallbackWinCpu = win && win.cpuCount > 0 ? win.cpuSum / win.cpuCount : totalCpu;
+      const fallbackWinMem =
+        win && win.memCount > 0 ? Math.round(win.memSum / win.memCount) : totalMemory;
+      const fallbackWinGpu = win && win.gpuCount > 0 ? win.gpuSum / win.gpuCount : totalGpu;
+      const fallbackWinGpuMem =
+        win && win.gpuMemCount > 0 ? Math.round(win.gpuMemSum / win.gpuMemCount) : totalGpuMemory;
+      const fallbackWinNet = win && win.netCount > 0 ? win.netSum / win.netCount : totalNetwork;
+
       groups.push({
         key,
         title,
         icon,
         primary,
         items,
-        totalCpu: hasCpu ? Math.min(100, totalCpuSum) : null,
+        totalCpu,
         cpuSampling: !hasCpu && cpuSampling,
         totalMemory,
-        totalGpu: hasGpu ? Math.min(100, totalGpuSum) : null,
+        totalGpu,
         gpuSampling: !hasGpu && gpuSampling,
         totalGpuMemory,
-        totalNetwork: hasNetwork ? totalNetworkSum : null,
+        totalNetwork,
         networkSampling: !hasNetwork && networkSampling,
         totalNetworkConnections,
+        windowCpu: backendSummary?.windowCpu ?? fallbackWinCpu,
+        windowMemory: backendSummary?.windowMemory ?? fallbackWinMem,
+        windowGpu: backendSummary?.windowGpu ?? fallbackWinGpu,
+        windowGpuMemory: backendSummary?.windowGpuMemory ?? fallbackWinGpuMem,
+        windowNetwork: backendSummary?.windowNetwork ?? fallbackWinNet,
+        cumulativeNetBytes: backendSummary?.cumulativeNetBytes ?? 0,
+        cpuDelta: backendSummary?.cpuDelta ?? 0,
+        memoryDeltaBytes: backendSummary?.memoryDeltaBytes ?? 0,
+        gpuDelta: backendSummary?.gpuDelta ?? 0,
+        networkDeltaBps: backendSummary?.networkDeltaBps ?? 0,
+        risingCategories: backendSummary?.risingCategories ?? [],
+        watched: Boolean(backendSummary?.watched),
+        watchTriggered: Boolean(backendSummary?.watchTriggered),
         ownership: primary.ownership,
         projectName: primary.projectName,
         workspaceName: primary.workspaceName,
@@ -798,44 +1434,55 @@ export function ProModeWorkspace({
     });
 
     return groups;
-  }, [filteredProcesses, state.processes.query, state.processes.sortBy, state.processes.sortDesc, state.subview]);
+  }, [
+    filteredProcesses,
+    windowGroupStats,
+    bountyData.groups,
+    state.processes.query,
+    state.processes.sortBy,
+    state.processes.sortDesc,
+    state.subview,
+  ]);
 
   const bountyRankings = useMemo(() => {
     const byCpu = [...processGroups]
       .sort((a, b) => {
-        const ca = a.totalCpu ?? -1;
-        const cb = b.totalCpu ?? -1;
+        const ca = a.windowCpu ?? -1;
+        const cb = b.windowCpu ?? -1;
         if (cb !== ca) return cb - ca;
-        return b.totalMemory - a.totalMemory;
+        return b.windowMemory - a.windowMemory;
       })
       .slice(0, 3);
 
     const byMemory = [...processGroups]
       .sort((a, b) => {
-        if (b.totalMemory !== a.totalMemory) return b.totalMemory - a.totalMemory;
-        return (b.totalCpu ?? -1) - (a.totalCpu ?? -1);
+        if (b.windowMemory !== a.windowMemory) return b.windowMemory - a.windowMemory;
+        return (b.windowCpu ?? -1) - (a.windowCpu ?? -1);
       })
       .slice(0, 3);
 
     const byGpu = [...processGroups]
       .sort((a, b) => {
-        const ga = a.totalGpu ?? -1;
-        const gb = b.totalGpu ?? -1;
+        const ga = a.windowGpu ?? -1;
+        const gb = b.windowGpu ?? -1;
         if (gb !== ga) return gb - ga;
-        if (b.totalGpuMemory !== a.totalGpuMemory) return b.totalGpuMemory - a.totalGpuMemory;
-        return b.totalMemory - a.totalMemory;
+        if (b.windowGpuMemory !== a.windowGpuMemory) return b.windowGpuMemory - a.windowGpuMemory;
+        return b.windowMemory - a.windowMemory;
       })
       .slice(0, 3);
 
     const byNetwork = [...processGroups]
       .sort((a, b) => {
-        const na = a.totalNetwork ?? -1;
-        const nb = b.totalNetwork ?? -1;
+        const na = a.windowNetwork ?? -1;
+        const nb = b.windowNetwork ?? -1;
         if (nb !== na) return nb - na;
+        if (b.cumulativeNetBytes !== a.cumulativeNetBytes) {
+          return b.cumulativeNetBytes - a.cumulativeNetBytes;
+        }
         if (b.totalNetworkConnections !== a.totalNetworkConnections) {
           return b.totalNetworkConnections - a.totalNetworkConnections;
         }
-        return b.totalMemory - a.totalMemory;
+        return b.windowMemory - a.windowMemory;
       })
       .slice(0, 3);
 
@@ -846,6 +1493,48 @@ export function ProModeWorkspace({
       network: byNetwork,
     };
   }, [processGroups]);
+
+  const bountyPeakRankings = useMemo(() => {
+    const filteredEvents = bountyData.events.filter((ev) => {
+      if (state.processes.project !== "all" && ev.projectId !== state.processes.project) {
+        return false;
+      }
+      if (state.processes.workspace !== "all" && ev.workspaceId !== state.processes.workspace) {
+        return false;
+      }
+      if (state.processes.ownership !== "all" && ev.ownership !== state.processes.ownership) {
+        return false;
+      }
+      return true;
+    });
+
+    const rankCategory = (cat: "cpu" | "memory" | "gpu" | "network") =>
+      filteredEvents
+        .filter((e) => e.category === cat)
+        .sort((a, b) => {
+          if (a.reasonKind !== b.reasonKind) {
+            if (a.reasonKind === "watch_triggered") return -1;
+            if (b.reasonKind === "watch_triggered") return 1;
+            if (a.reasonKind === "rapid_rise") return -1;
+            if (b.reasonKind === "rapid_rise") return 1;
+          }
+          if (b.peakValue !== a.peakValue) return b.peakValue - a.peakValue;
+          return (b.cumulativeBytes ?? 0) - (a.cumulativeBytes ?? 0);
+        })
+        .slice(0, 3);
+
+    return {
+      cpu: rankCategory("cpu"),
+      memory: rankCategory("memory"),
+      gpu: rankCategory("gpu"),
+      network: rankCategory("network"),
+    };
+  }, [bountyData.events, state.processes.project, state.processes.workspace, state.processes.ownership]);
+
+  const selectedPeakEvent = useMemo(() => {
+    if (!selectedPeakEventId) return undefined;
+    return bountyData.events.find((e) => e.id === selectedPeakEventId);
+  }, [bountyData.events, selectedPeakEventId]);
 
   const selectedProcess = useMemo(() => {
     if (!filteredProcesses.length) return undefined;
@@ -1029,11 +1718,34 @@ export function ProModeWorkspace({
     return null;
   }
 
+  function resourceOrigin(item: ResourceProcess, run: Run): ResourceOriginContext {
+    return {
+      subview: state.subview,
+      label: `${item.displayName || item.processDisplayName || item.name || item.processName || run.title} (PID ${item.pid})`,
+      runId: run.id,
+      runTitle: run.title,
+      commandId: run.commandId,
+      projectId: item.projectId,
+      projectName: item.projectName,
+      workspaceId: item.workspaceId,
+      workspaceName: item.workspaceName,
+      pid: item.pid,
+      portQuery: state.subview === "ports" ? state.ports.query : undefined,
+      targetPath: state.subview === "files" ? state.files.targetPath : undefined,
+      reviewStatus: "active",
+    };
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-surface">
+    <ResourceActionsProvider items={state.subview === "ports" ? filteredPorts : state.subview === "files" ? fileData.items : processGroups.flatMap(group => group.items)} m={m} onRefresh={handleRefresh}
+      runActions={{ runs, commands, operations: runOperations, errors: launchErrors, onReplay, onStop,
+        onOpenRun: (item, run) => onOpenRun(run.id, resourceOrigin(item, run)),
+        onOpenCommand: (item, run, command) => onOpenCommand(command.id, resourceOrigin(item, run)),
+      }}>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface">
       {/* Sub-navigation bar */}
-      <header className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
-        <div className="flex items-center gap-1" role="tablist" aria-label={m.proMode}>
+      <header className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-2 @min-[36rem]/desktop:px-4">
+        <div className="flex min-w-0 items-center gap-1 overflow-x-auto" role="tablist" aria-label={m.proMode}>
           {(
             [
               ["home", m.proHome],
@@ -1049,7 +1761,7 @@ export function ProModeWorkspace({
                 type="button"
                 role="tab"
                 aria-selected={active}
-                className={`inline-flex h-7 items-center rounded-sm px-3 text-xs transition-colors ${
+                className={`inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-sm px-3 text-xs transition-colors ${
                   active
                     ? "bg-selected font-medium text-selected-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -1064,33 +1776,36 @@ export function ProModeWorkspace({
             );
           })}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {isStaleOrigin && (
             <span className="border border-warning/30 bg-warning-surface px-2 py-0.5 text-xs text-warning-foreground">
               {m.staleResultSuffix}
             </span>
           )}
           <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2.5 text-xs"
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 text-muted-foreground hover:text-foreground"
             disabled={loading}
             onClick={handleRefresh}
+            title={m.refresh}
+            aria-label={m.refresh}
           >
             <RefreshCw
               className={`size-3.5 ${loading ? "motion-safe:animate-spin" : ""}`}
               aria-hidden="true"
             />
-            {m.refresh}
           </Button>
         </div>
       </header>
+      <ResourceBatchActions />
 
       {/* Filter bar per subview */}
       {(state.subview === "home" || state.subview === "processes") && (
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-sunken/30 px-4 py-2">
           {state.subview === "home" ? (
-            <div className="flex min-h-8 flex-wrap items-center gap-2">
+            <div className="flex min-h-8 flex-wrap items-center gap-2.5">
               <h2 className="text-xs font-semibold tracking-tight text-foreground">
                 {m.bountyBoard}
               </h2>
@@ -1098,6 +1813,76 @@ export function ProModeWorkspace({
                 <BountyRabbitBadge rank={1} m={m} />
                 <BountyRabbitBadge rank={2} m={m} />
                 <BountyRabbitBadge rank={3} m={m} />
+              </div>
+              <div
+                className="inline-flex items-center border border-border bg-surface p-0.5 text-xs"
+                role="tablist"
+                aria-label={m.bountyBoard}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={bountyMode === "live"}
+                  onClick={() => setBountyMode("live")}
+                  className={`inline-flex h-6 items-center gap-1.5 px-2 text-[11px] transition-colors ${
+                    bountyMode === "live"
+                      ? "bg-selected font-medium text-selected-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span
+                    className={`size-1.5 rounded-full ${
+                      bountyMode === "live"
+                        ? "bg-selected-foreground motion-safe:animate-pulse"
+                        : "bg-success"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span>{m.bountyWindowSeconds.replace("%d", "30")}</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={bountyMode === "peaks"}
+                  onClick={() => setBountyMode("peaks")}
+                  className={`inline-flex h-6 items-center gap-1 px-2 text-[11px] transition-colors ${
+                    bountyMode === "peaks"
+                      ? "bg-selected font-medium text-selected-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span>{m.bountyModePeaks}</span>
+                  {bountyData.events.length > 0 && (
+                    <span className="font-mono text-[10px] tabular-nums opacity-80">
+                      {bountyData.events.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={bountyMode === "watch"}
+                  onClick={() => setBountyMode("watch")}
+                  className={`inline-flex h-6 items-center gap-1 px-2 text-[11px] transition-colors ${
+                    bountyMode === "watch"
+                      ? "bg-selected font-medium text-selected-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Bell className="size-3" aria-hidden="true" />
+                  <span>{m.bountyModeWatch}</span>
+                  {bountyData.unreadAlertCount > 0 ? (
+                    <span className="inline-flex h-4 min-w-4 items-center justify-center bg-warning px-1 font-mono text-[10px] font-semibold leading-none text-warning-foreground">
+                      {bountyData.unreadAlertCount}
+                    </span>
+                  ) : (
+                    bountyData.watches.length > 0 && (
+                      <span className="font-mono text-[10px] tabular-nums opacity-80">
+                        {bountyData.watches.length}
+                      </span>
+                    )
+                  )}
+                </button>
               </div>
             </div>
           ) : (
@@ -1137,60 +1922,172 @@ export function ProModeWorkspace({
               )}
             </div>
           )}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="w-36">
-              <Picker
-                label={m.colOwnership}
-                value={state.processes.ownership}
-                options={[
-                  ["all", m.allOwnership],
-                  ["managed", m.ownershipManaged],
-                  ["external", m.ownershipExternal],
-                  ["unconfirmed", m.ownershipUnconfirmed],
-                ]}
-                onChange={(ownership) =>
-                  onStateChange((prev) => ({
-                    ...prev,
-                    processes: { ...prev.processes, ownership },
-                  }))
-                }
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="w-40">
-              <Picker
-                label={m.project}
-                value={state.processes.project}
-                options={[
-                  ["all", m.allProjects],
-                  ...projects.map((p): [string, string] => [p.id, p.name]),
-                ]}
-                onChange={(project) =>
-                  onStateChange((prev) => ({
-                    ...prev,
-                    processes: { ...prev.processes, project, workspace: "all" },
-                  }))
-                }
-                className="h-8 text-xs"
-              />
-            </div>
-            {workspaceOptions.length > 1 && (
-              <div className="w-44">
-                <Picker
-                  label={m.workspace}
-                  value={state.processes.workspace}
-                  options={workspaceOptions}
-                  onChange={(workspace) =>
-                    onStateChange((prev) => ({
-                      ...prev,
-                      processes: { ...prev.processes, workspace },
-                    }))
-                  }
-                  className="h-8 text-xs"
-                />
-              </div>
+          <div className="flex items-center gap-1.5">
+            {state.subview === "home" && bountyMode === "peaks" && bountyData.events.length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="size-7 text-muted-foreground hover:text-foreground"
+                onClick={() => void handleClearPeaks()}
+                title={m.bountyClearPeaks}
+                aria-label={m.bountyClearPeaks}
+              >
+                <Trash2 className="size-3.5" aria-hidden="true" />
+              </Button>
             )}
+            {state.subview === "home" && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="size-7 text-muted-foreground hover:text-foreground"
+                onClick={() => openWatchDialogFor()}
+                title={m.bountyAddWatch}
+                aria-label={m.bountyAddWatch}
+              >
+                <Plus className="size-3.5" aria-hidden="true" />
+              </Button>
+            )}
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className={`size-7 ${
+                    state.processes.ownership !== "all" ||
+                    state.processes.project !== "all" ||
+                    state.processes.workspace !== "all"
+                      ? "bg-selected text-selected-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={m.filter}
+                  aria-label={m.filter}
+                >
+                  <ListFilter className="size-3.5" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-80 min-w-44 overflow-y-auto">
+                <DropdownMenuLabel>{m.colOwnership}</DropdownMenuLabel>
+                {(
+                  [
+                    ["all", m.allOwnership],
+                    ["managed", m.ownershipManaged],
+                    ["external", m.ownershipExternal],
+                    ["unconfirmed", m.ownershipUnconfirmed],
+                  ] as [string, string][]
+                ).map(([val, label]) => {
+                  const checked = state.processes.ownership === val;
+                  return (
+                    <DropdownMenuItem
+                      key={`ownership-${val}`}
+                      role="menuitemradio"
+                      aria-checked={checked}
+                      onSelect={() =>
+                        onStateChange((prev) => ({
+                          ...prev,
+                          processes: { ...prev.processes, ownership: val },
+                        }))
+                      }
+                    >
+                      <Check className={checked ? "" : "invisible"} aria-hidden="true" />
+                      <span className="truncate">{label}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{m.project}</DropdownMenuLabel>
+                {(
+                  [
+                    ["all", m.allProjects],
+                    ...projects.map((p): [string, string] => [p.id, p.name]),
+                  ] as [string, string][]
+                ).map(([val, label]) => {
+                  const checked = state.processes.project === val;
+                  return (
+                    <DropdownMenuItem
+                      key={`project-${val}`}
+                      role="menuitemradio"
+                      aria-checked={checked}
+                      onSelect={() =>
+                        onStateChange((prev) => ({
+                          ...prev,
+                          processes: { ...prev.processes, project: val, workspace: "all" },
+                        }))
+                      }
+                    >
+                      <Check className={checked ? "" : "invisible"} aria-hidden="true" />
+                      <span className="truncate">{label}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+                {workspaceOptions.length > 1 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>{m.workspace}</DropdownMenuLabel>
+                    {workspaceOptions.map(([val, label]) => {
+                      const checked = state.processes.workspace === val;
+                      return (
+                        <DropdownMenuItem
+                          key={`workspace-${val}`}
+                          role="menuitemradio"
+                          aria-checked={checked}
+                          onSelect={() =>
+                            onStateChange((prev) => ({
+                              ...prev,
+                              processes: { ...prev.processes, workspace: val },
+                            }))
+                          }
+                        >
+                          <Check className={checked ? "" : "invisible"} aria-hidden="true" />
+                          <span className="truncate">{label}</span>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+        </div>
+      )}
+
+      {/* Unread Bounty Watch Alert Banner */}
+      {bountyData.watches.some((w) => w.unreadHit) && (
+        <div
+          role="status"
+          className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-warning/30 bg-warning-surface px-4 py-1.5 text-xs"
+        >
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Bell className="size-3.5 shrink-0 text-warning-foreground" aria-hidden="true" />
+            {bountyData.watches
+              .filter((w) => w.unreadHit)
+              .slice(0, 3)
+              .map((w) => (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => {
+                    onStateChange((prev) => ({ ...prev, subview: "home" }));
+                    setBountyMode("peaks");
+                    const ev = bountyData.events.find(
+                      (e) => e.watchId === w.id || e.title.toLowerCase() === w.targetName.toLowerCase(),
+                    );
+                    if (ev) {
+                      setSelectedPeakEventId(ev.id);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 border border-warning/40 bg-background px-2 py-0.5 text-[11px] font-medium text-warning-foreground hover:bg-accent"
+                >
+                  <span>{m.bountyAlertBanner.replace("%s", w.title || w.targetName)}</span>
+                  <span className="font-mono opacity-80">({formatWatchRuleSummary(w, m)})</span>
+                </button>
+              ))}
+          </div>
+          <Button variant="ghost" size="xs" onClick={() => void handleAckAlerts()}>
+            {m.bountyAcknowledge}
+          </Button>
         </div>
       )}
 
@@ -1237,94 +2134,143 @@ export function ProModeWorkspace({
               </Button>
             )}
           </div>
-          <div className="w-36">
-            <Picker
-              label={m.colProtocol}
-              value={state.ports.protocol}
-              options={[
-                ["all", m.protocolAll],
-                ["TCP", "TCP"],
-                ["UDP", "UDP"],
-              ]}
-              onChange={(protocol) =>
-                onStateChange((prev) => ({
-                  ...prev,
-                  ports: { ...prev.ports, protocol },
-                }))
-              }
-              className="h-8 text-xs"
-            />
-          </div>
-          <div className="w-36">
-            <Picker
-              label={m.colState}
-              value={state.ports.state}
-              options={[
-                ["all", m.stateAll],
-                ["LISTEN", m.stateListening],
-                ["BOUND", m.stateBound],
-                ["ESTABLISHED", m.stateEstablished],
-              ]}
-              onChange={(portState) =>
-                onStateChange((prev) => ({
-                  ...prev,
-                  ports: { ...prev.ports, state: portState },
-                }))
-              }
-              className="h-8 text-xs"
-            />
-          </div>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className={`size-7 ${
+                  state.ports.protocol !== "all" || state.ports.state !== "all"
+                    ? "bg-selected text-selected-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title={m.filter}
+                aria-label={m.filter}
+              >
+                <ListFilter className="size-3.5" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-40">
+              <DropdownMenuLabel>{m.colProtocol}</DropdownMenuLabel>
+              {(
+                [
+                  ["all", m.protocolAll],
+                  ["TCP", "TCP"],
+                  ["UDP", "UDP"],
+                ] as [string, string][]
+              ).map(([val, label]) => {
+                const checked = state.ports.protocol === val;
+                return (
+                  <DropdownMenuItem
+                    key={`protocol-${val}`}
+                    role="menuitemradio"
+                    aria-checked={checked}
+                    onSelect={() =>
+                      onStateChange((prev) => ({
+                        ...prev,
+                        ports: { ...prev.ports, protocol: val },
+                      }))
+                    }
+                  >
+                    <Check className={checked ? "" : "invisible"} aria-hidden="true" />
+                    <span className="truncate">{label}</span>
+                  </DropdownMenuItem>
+                );
+              })}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>{m.colState}</DropdownMenuLabel>
+              {(
+                [
+                  ["all", m.stateAll],
+                  ["LISTEN", m.stateListening],
+                  ["BOUND", m.stateBound],
+                  ["ESTABLISHED", m.stateEstablished],
+                ] as [string, string][]
+              ).map(([val, label]) => {
+                const checked = state.ports.state === val;
+                return (
+                  <DropdownMenuItem
+                    key={`state-${val}`}
+                    role="menuitemradio"
+                    aria-checked={checked}
+                    onSelect={() =>
+                      onStateChange((prev) => ({
+                        ...prev,
+                        ports: { ...prev.ports, state: val },
+                      }))
+                    }
+                  >
+                    <Check className={checked ? "" : "invisible"} aria-hidden="true" />
+                    <span className="truncate">{label}</span>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
 
       {state.subview === "files" && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface-sunken/30 px-4 py-2">
-          <div className="min-w-60 flex-1">
-            <Input
-              value={state.files.targetPath}
-              onChange={(e) =>
-                onStateChange((prev) => ({
-                  ...prev,
-                  files: { ...prev.files, targetPath: e.target.value },
-                }))
-              }
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && state.files.targetPath.trim()) {
-                  e.preventDefault();
-                  void loadFiles(state.files.targetPath, state.files.recursive);
+        <div className="flex shrink-0 flex-col gap-2 border-b border-border bg-surface-sunken/30 px-2 py-2 @min-[36rem]/desktop:px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <Input
+                value={state.files.targetPath}
+                onChange={(e) =>
+                  onStateChange((prev) => ({
+                    ...prev,
+                    files: { ...prev.files, targetPath: e.target.value },
+                  }))
                 }
-              }}
-              placeholder={m.searchFilesPlaceholder}
-              aria-label={m.searchFilesPlaceholder}
-              className="h-8 font-mono text-xs"
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
-              disabled={loading}
-              onClick={() => void chooseTargetPath("file")}
-            >
-              <FileSearch className="size-3.5" aria-hidden="true" />
-              {m.chooseFile}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs"
-              disabled={loading}
-              onClick={() => void chooseTargetPath("directory")}
-            >
-              <FolderOpen className="size-3.5" aria-hidden="true" />
-              {m.chooseFolder}
-            </Button>
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && state.files.targetPath.trim()) {
+                    e.preventDefault();
+                    void loadFiles(state.files.targetPath, state.files.recursive);
+                  }
+                }}
+                placeholder={m.searchFilesPlaceholder}
+                aria-label={m.searchFilesPlaceholder}
+                className="h-8 font-mono text-xs"
+              />
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                disabled={loading}
+                onClick={() => void chooseTargetPath("file")}
+                title={m.chooseFile}
+                aria-label={m.chooseFile}
+              >
+                <FileSearch className="size-3.5" aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                disabled={loading}
+                onClick={() => void chooseTargetPath("directory")}
+                title={m.chooseFolder}
+                aria-label={m.chooseFolder}
+              >
+                <FolderOpen className="size-3.5" aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                size="icon-sm"
+                disabled={loading || !state.files.targetPath.trim()}
+                onClick={() => void loadFiles(state.files.targetPath, state.files.recursive)}
+                title={m.queryAction}
+                aria-label={m.queryAction}
+              >
+                <Search className="size-3.5" aria-hidden="true" />
+              </Button>
+            </div>
           </div>
           {state.files.isDirectory && (
-            <label className="flex h-8 items-center gap-1.5 px-1 text-xs text-foreground-secondary">
+            <label className="flex min-h-6 items-center gap-1.5 self-start px-1 text-xs text-foreground-secondary">
               <Checkbox
                 checked={state.files.recursive}
                 onCheckedChange={(checked) =>
@@ -1337,15 +2283,6 @@ export function ProModeWorkspace({
               {m.includeSubdirectories}
             </label>
           )}
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 text-xs"
-            disabled={loading || !state.files.targetPath.trim()}
-            onClick={() => void loadFiles(state.files.targetPath, state.files.recursive)}
-          >
-            {m.queryAction}
-          </Button>
         </div>
       )}
 
@@ -1361,9 +2298,8 @@ export function ProModeWorkspace({
             </span>
             <span>{m.staleResultBanner}</span>
           </div>
-          <Button size="xs" onClick={handleRefresh}>
-            <RefreshCw className="size-3" aria-hidden="true" />
-            {m.recheckNow}
+          <Button size="icon-sm" onClick={handleRefresh} aria-label={m.recheckNow} title={m.recheckNow}>
+            <RefreshCw className="size-4" aria-hidden="true" />
           </Button>
         </div>
       )}
@@ -1390,14 +2326,14 @@ export function ProModeWorkspace({
       )}
 
       {/* Main Split Content Area */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         {/* Left Table / Bounty Board Area */}
         <div
           className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-auto ${
             narrowDetailOpen ? "hidden @min-[63rem]/desktop:flex" : "flex"
           }`}
         >
-          {state.subview === "home" && (
+          {state.subview === "home" && bountyMode === "live" && (
             <div className="grid grid-cols-1 border-b border-border @min-[44rem]/desktop:grid-cols-2">
               {(
                 [
@@ -1464,7 +2400,7 @@ export function ProModeWorkspace({
                             className="flex h-13 items-center justify-between gap-2.5 px-3 text-xs text-muted-foreground"
                           >
                             <div className="flex items-center gap-2.5 opacity-45">
-                              <BountyRabbitBadge rank={rank} m={m} />
+                              <BountyRabbitBadge rank={rank} m={m} iconOnly />
                               <span>--</span>
                             </div>
                             <span className="font-mono tabular-nums">--</span>
@@ -1495,42 +2431,67 @@ export function ProModeWorkspace({
 
                       const primaryMetric =
                         cat.id === "cpu"
-                          ? group.cpuSampling
+                          ? group.cpuSampling && group.windowCpu == null
                             ? m.cpuSampling
-                            : group.totalCpu != null
-                              ? `${group.totalCpu.toFixed(1)}%`
+                            : group.windowCpu != null
+                              ? `${group.windowCpu.toFixed(1)}%`
                               : "--"
                           : cat.id === "memory"
-                            ? formatMemory(group.totalMemory)
+                            ? formatMemory(group.windowMemory)
                             : cat.id === "gpu"
-                              ? group.gpuSampling
+                              ? group.gpuSampling && group.windowGpu == null
                                 ? m.cpuSampling
-                                : group.totalGpu != null
-                                  ? `${group.totalGpu.toFixed(1)}%`
-                                  : group.totalGpuMemory > 0
-                                    ? formatMemory(group.totalGpuMemory)
+                                : group.windowGpu != null
+                                  ? `${group.windowGpu.toFixed(1)}%`
+                                  : group.windowGpuMemory > 0
+                                    ? formatMemory(group.windowGpuMemory)
                                     : "--"
-                              : formatNetworkRate(group.totalNetwork, group.networkSampling, m);
+                              : formatNetworkRate(
+                                  group.windowNetwork,
+                                  group.networkSampling && group.windowNetwork == null,
+                                  m,
+                                );
+
+                      const rapidRiseText =
+                        cat.id === "cpu" && group.cpuDelta >= 25
+                          ? `↑ +${Math.round(group.cpuDelta)}%`
+                          : cat.id === "memory" && group.memoryDeltaBytes >= 150 * 1024 * 1024
+                            ? `↑ +${formatMemory(group.memoryDeltaBytes)}`
+                            : cat.id === "gpu" && group.gpuDelta >= 25
+                              ? `↑ +${Math.round(group.gpuDelta)}%`
+                              : cat.id === "network" && group.networkDeltaBps >= 512 * 1024
+                                ? `↑ +${formatNetworkRate(group.networkDeltaBps, false, m)}`
+                                : "";
 
                       const secondaryMetric =
                         cat.id === "cpu"
-                          ? formatMemory(group.totalMemory)
+                          ? `${m.colMemory} ${formatMemory(group.windowMemory)}`
                           : cat.id === "memory"
-                            ? group.totalCpu != null
-                              ? `${group.totalCpu.toFixed(1)}% CPU`
+                            ? group.windowCpu != null
+                              ? `${group.windowCpu.toFixed(1)}% ${m.colCpu}`
                               : `PID ${rep.pid}`
                             : cat.id === "gpu"
-                              ? group.totalGpuMemory > 0
-                                ? `${m.gpuMemoryLabel} ${formatMemory(group.totalGpuMemory)}`
-                                : formatMemory(group.totalMemory)
-                              : group.totalNetworkConnections > 0
-                                ? `${group.totalNetworkConnections} ${m.networkConnectionsUnit}`
-                                : formatMemory(group.totalMemory);
+                              ? group.windowGpuMemory > 0
+                                ? `${m.gpuMemoryLabel} ${formatMemory(group.windowGpuMemory)}`
+                                : `${m.colMemory} ${formatMemory(group.windowMemory)}`
+                              : group.cumulativeNetBytes > 0
+                                ? [
+                                    `${m.bountyCumulativePrefix} ${formatMemory(group.cumulativeNetBytes)}`,
+                                    group.totalNetworkConnections > 0
+                                      ? `${group.totalNetworkConnections} ${m.networkConnectionsUnit}`
+                                      : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")
+                                : group.totalNetworkConnections > 0
+                                  ? `${group.totalNetworkConnections} ${m.networkConnectionsUnit}`
+                                  : `${m.colMemory} ${formatMemory(group.windowMemory)}`;
 
                       return (
-                        <div
-                          key={`${cat.id}-${group.key}`}
+                        <ResourceMenu key={`${cat.id}-${group.key}`} items={group.items}>
+                        <div tabIndex={0}
                           onClick={() => {
+                            setSelectedPeakEventId(undefined);
                             onStateChange((prev) => ({
                               ...prev,
                               processes: { ...prev.processes, selectedPid: rep.pid },
@@ -1544,7 +2505,7 @@ export function ProModeWorkspace({
                           }`}
                         >
                           <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                            <BountyRabbitBadge rank={rank} m={m} selected={rowSelected} />
+                            <BountyRabbitBadge rank={rank} m={m} selected={rowSelected} iconOnly />
                             <ProcessIcon
                               name={group.primary.name}
                               displayName={group.title}
@@ -1562,6 +2523,30 @@ export function ProModeWorkspace({
                                     }`}
                                   >
                                     ({group.items.length})
+                                  </span>
+                                )}
+                                {group.watched && (
+                                  <Bell
+                                    className={`size-3 shrink-0 ${
+                                      rowSelected
+                                        ? "text-selected-foreground"
+                                        : group.watchTriggered
+                                          ? "text-warning-foreground"
+                                          : "text-muted-foreground"
+                                    }`}
+                                    aria-label={m.bountyModeWatch}
+                                  />
+                                )}
+                                {rapidRiseText && (
+                                  <span
+                                    className={`shrink-0 border px-1 py-0.5 font-mono text-[10px] font-medium leading-none tabular-nums ${
+                                      rowSelected
+                                        ? "border-selected-foreground/30 bg-selected-foreground/15 text-selected-foreground"
+                                        : "border-warning/35 bg-warning-surface text-warning-foreground"
+                                    }`}
+                                    title={m.bountyRapidRise}
+                                  >
+                                    {rapidRiseText}
                                   </span>
                                 )}
                                 {group.ownership === "managed" && (
@@ -1613,6 +2598,7 @@ export function ProModeWorkspace({
                             </div>
                           </div>
                         </div>
+                        </ResourceMenu>
                       );
                     })}
                   </div>
@@ -1621,10 +2607,366 @@ export function ProModeWorkspace({
             </div>
           )}
 
+          {state.subview === "home" && bountyMode === "peaks" && (
+            <div className="grid grid-cols-1 border-b border-border @min-[44rem]/desktop:grid-cols-2">
+              {(
+                [
+                  {
+                    id: "cpu" as const,
+                    label: m.colCpu,
+                    items: bountyPeakRankings.cpu,
+                    borderCls: "border-b border-border @min-[44rem]/desktop:border-r",
+                  },
+                  {
+                    id: "memory" as const,
+                    label: m.colMemory,
+                    items: bountyPeakRankings.memory,
+                    borderCls: "border-b border-border",
+                  },
+                  {
+                    id: "gpu" as const,
+                    label: m.colGpu,
+                    items: bountyPeakRankings.gpu,
+                    borderCls:
+                      "border-b border-border @min-[44rem]/desktop:border-b-0 @min-[44rem]/desktop:border-r",
+                  },
+                  {
+                    id: "network" as const,
+                    label: m.colNetwork,
+                    items: bountyPeakRankings.network,
+                    borderCls: "",
+                  },
+                ]
+              ).map((cat) => (
+                <section
+                  key={`peaks-${cat.id}`}
+                  aria-label={`${m.bountyModePeaks} · ${cat.label}`}
+                  className={`flex min-w-0 flex-col ${cat.borderCls}`}
+                >
+                  <div className="flex h-8 shrink-0 items-center justify-between border-b border-border bg-surface-sunken px-3 text-xs">
+                    <span className="font-medium text-foreground">{cat.label}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onStateChange((prev) => ({
+                          ...prev,
+                          subview: "processes",
+                          processes: {
+                            ...prev.processes,
+                            sortBy: cat.id,
+                            sortDesc: true,
+                          },
+                        }))
+                      }
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <span>{m.proProcesses}</span>
+                      <span aria-hidden="true">→</span>
+                    </button>
+                  </div>
+                  <div className="divide-y divide-border/60">
+                    {([1, 2, 3] as const).map((rank) => {
+                      const ev = cat.items[rank - 1];
+                      if (!ev) {
+                        return (
+                          <div
+                            key={`peaks-${cat.id}-empty-${rank}`}
+                            className="flex h-13 items-center justify-between gap-2.5 px-3 text-xs text-muted-foreground"
+                          >
+                            <div className="flex items-center gap-2.5 opacity-45">
+                              <BountyRabbitBadge rank={rank} m={m} iconOnly />
+                        <span>{m.bountyNoPeaks}</span>
+                            </div>
+                            <span className="font-mono tabular-nums">--</span>
+                          </div>
+                        );
+                      }
+
+                      const rowSelected =
+                        selectedPeakEvent?.id === ev.id ||
+                        (!selectedPeakEvent && selectedGroup?.key === ev.groupKey);
+
+                      const primaryMetric =
+                        cat.id === "cpu" || cat.id === "gpu"
+                          ? `${m.bountyPeakPrefix} ${ev.peakValue.toFixed(1)}%`
+                          : cat.id === "memory"
+                            ? `${m.bountyPeakPrefix} ${formatMemory(ev.peakValue)}`
+                            : `${m.bountyPeakPrefix} ${formatNetworkRate(ev.peakValue, false, m)}`;
+
+                      const deltaText =
+                        ev.deltaValue && ev.deltaValue > 0
+                          ? cat.id === "cpu" || cat.id === "gpu"
+                            ? `↑ +${Math.round(ev.deltaValue)}%`
+                            : cat.id === "memory"
+                              ? `↑ +${formatMemory(ev.deltaValue)}`
+                              : `↑ +${formatNetworkRate(ev.deltaValue, false, m)}`
+                          : "";
+
+                      const secondaryMetric =
+                        cat.id === "network" && (ev.cumulativeBytes ?? 0) > 0
+                          ? [
+                              deltaText,
+                              `${m.bountyCumulativePrefix} ${formatMemory(ev.cumulativeBytes!)}`,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")
+                          : deltaText
+                            ? `${deltaText} · ${m.colMemory} ${formatMemory(ev.memoryBytes ?? 0)}`
+                            : `${m.colMemory} ${formatMemory(ev.memoryBytes ?? 0)}`;
+
+                      return (
+                        <div
+                          key={ev.id}
+                          tabIndex={0}
+                          onClick={() => {
+                            setSelectedPeakEventId(ev.id);
+                            const liveMatch =
+                              filteredProcesses.find((p) => p.pid === ev.pid) ??
+                              processGroups.find((g) => g.key === ev.groupKey)?.primary;
+                            if (liveMatch) {
+                              onStateChange((prev) => ({
+                                ...prev,
+                                processes: { ...prev.processes, selectedPid: liveMatch.pid },
+                              }));
+                            }
+                            setNarrowDetailOpen(true);
+                          }}
+                          className={`flex h-13 cursor-pointer select-none items-center justify-between gap-2.5 px-3 text-xs transition-colors ${
+                            rowSelected
+                              ? "bg-selected text-selected-foreground"
+                              : "hover:bg-surface-sunken/70"
+                          }`}
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                            <BountyRabbitBadge rank={rank} m={m} selected={rowSelected} iconOnly />
+                            <ProcessIcon
+                              name={ev.processName}
+                              displayName={ev.title}
+                              icon={ev.icon}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate font-medium">{ev.title}</span>
+                                {ev.reasonKind === "rapid_rise" && (
+                                  <span
+                                    className={`shrink-0 border px-1 py-0.5 text-[10px] font-medium leading-none ${
+                                      rowSelected
+                                        ? "border-selected-foreground/30 bg-selected-foreground/15 text-selected-foreground"
+                                        : "border-warning/35 bg-warning-surface text-warning-foreground"
+                                    }`}
+                                  >
+                                    {m.bountyRapidRise}
+                                  </span>
+                                )}
+                                {ev.reasonKind === "watch_triggered" && (
+                                  <Bell
+                                    className={`size-3 shrink-0 ${
+                                      rowSelected
+                                        ? "text-selected-foreground"
+                                        : "text-warning-foreground"
+                                    }`}
+                                    aria-label={m.bountyModeWatch}
+                                  />
+                                )}
+                                {ev.processExited && (
+                                  <span
+                                    className={`shrink-0 border px-1 py-0.5 text-[10px] leading-none ${
+                                      rowSelected
+                                        ? "border-selected-foreground/30 text-selected-foreground/85"
+                                        : "border-border bg-surface-sunken text-muted-foreground"
+                                    }`}
+                                  >
+                                    {m.processExited}
+                                  </span>
+                                )}
+                                {ev.ownership === "managed" && (
+                                  <span
+                                    className={`shrink-0 border px-1 py-0.5 text-[10px] font-medium leading-none ${
+                                      rowSelected
+                                        ? "border-selected-foreground/30 bg-selected-foreground/15 text-selected-foreground"
+                                        : "border-success/30 bg-success-surface text-success"
+                                    }`}
+                                  >
+                                    YouRun
+                                  </span>
+                                )}
+                              </div>
+                              <div
+                                className={`truncate font-mono text-[10px] tabular-nums ${
+                                  rowSelected
+                                    ? "text-selected-foreground/75"
+                                    : "text-muted-foreground"
+                                }`}
+                              >
+                                {[
+                                  formatObservedTime(ev.peakAt, locale),
+                                  ev.ownership === "managed" && ev.projectName
+                                    ? [ev.projectName, formatWorkspaceName(ev.workspaceName, m)]
+                                        .filter(Boolean)
+                                        .join(" · ")
+                                    : `PID ${ev.pid}`,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right font-mono tabular-nums">
+                            <div
+                              className={`text-xs font-semibold ${
+                                rowSelected ? "text-selected-foreground" : "text-foreground"
+                              }`}
+                            >
+                              {primaryMetric}
+                            </div>
+                            <div
+                              className={`text-[10px] ${
+                                rowSelected
+                                  ? "text-selected-foreground/75"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {secondaryMetric}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
+
+          {state.subview === "home" && bountyMode === "watch" && (
+            <div className="flex flex-col border-b border-border">
+              <div className="flex h-8 shrink-0 items-center justify-between border-b border-border bg-surface-sunken px-3 text-xs">
+                <span className="font-medium text-foreground">
+                  {m.bountyModeWatch} ({bountyData.watches.length})
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => openWatchDialogFor()}
+                  aria-label={m.bountyAddWatch}
+                  title={m.bountyAddWatch}
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                </Button>
+              </div>
+              {bountyData.watches.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2.5 px-4 py-12 text-center text-xs text-muted-foreground">
+                  <span>{m.bountyNoWatches}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => openWatchDialogFor()}
+                    aria-label={m.bountyAddWatch}
+                    title={m.bountyAddWatch}
+                  >
+                    <Plus className="size-4" aria-hidden="true" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/60">
+                  {bountyData.watches.map((w) => {
+                    const lastPeakLabel =
+                      w.lastPeakValue != null && w.lastPeakValue > 0
+                        ? w.category === "network"
+                          ? w.conditionKind === "cumulative"
+                            ? formatMemory(w.lastPeakValue)
+                            : formatNetworkRate(w.lastPeakValue, false, m)
+                          : w.category === "memory"
+                            ? formatMemory(w.lastPeakValue)
+                            : `${w.lastPeakValue.toFixed(1)}%`
+                        : "";
+                    return (
+                      <div
+                        key={w.id}
+                        className="flex min-h-13 items-center justify-between gap-3 px-3 py-2 text-xs hover:bg-surface-sunken/50"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                          <Checkbox
+                            checked={w.enabled}
+                            onCheckedChange={(checked) =>
+                              void handleToggleWatch(w.id, checked === true)
+                            }
+                            aria-label={w.title || w.targetName}
+                          />
+                          <ProcessIcon name={w.targetName} displayName={w.title || w.targetName} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={`truncate font-medium ${
+                                  w.enabled ? "text-foreground" : "text-muted-foreground line-through"
+                                }`}
+                              >
+                                {w.title || w.targetName}
+                              </span>
+                              <span className="border border-border bg-surface-sunken px-1.5 py-0.5 font-mono text-[10px] text-foreground-secondary">
+                                {formatWatchRuleSummary(w, m)}
+                              </span>
+                              {w.unreadHit && (
+                                <span className="border border-warning/40 bg-warning-surface px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground">
+                                  {m.bountyAlertBanner.replace("%s", "").trim() || "!"}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-0.5 truncate font-mono text-[10px] tabular-nums text-muted-foreground">
+                              {w.hitCount > 0
+                                ? [
+                                    m.bountyHitCount.replace("%d", String(w.hitCount)),
+                                    lastPeakLabel ? `${m.bountyPeakPrefix} ${lastPeakLabel}` : "",
+                                    w.lastTriggeredAt
+                                      ? formatObservedTime(w.lastTriggeredAt, locale)
+                                      : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")
+                                : w.enabled
+                                  ? m.bountyWatchActive
+                                  : m.bountyWatchPaused}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {w.unreadHit && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="xs"
+                              onClick={() => void handleAckAlerts(w.id)}
+                            >
+                              {m.bountyAcknowledge}
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="size-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => void handleDeleteWatch(w.id)}
+                            title={m.remove}
+                            aria-label={m.remove}
+                          >
+                            <Trash2 className="size-3.5" aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {state.subview === "processes" && (
-            <table className="w-full table-fixed border-collapse text-left text-xs">
+            <table className="w-max min-w-full shrink-0 table-auto border-collapse whitespace-nowrap text-left text-xs">
               <thead className="sticky top-0 z-10 border-b border-border bg-surface-sunken text-muted-foreground">
                 <tr className="h-8">
+                  <ResourceSelectAll items={processGroups.flatMap(group => group.items)} />
                   <th className="px-3 py-1.5 font-medium">{m.colProcess}</th>
                   <th className="w-18 px-2 py-1.5 text-right font-medium">{m.colPid}</th>
                   <th className="w-20 px-2 py-1.5 text-right font-medium">
@@ -1740,7 +3082,7 @@ export function ProModeWorkspace({
                     const item = group.primary;
                     const selected = selectedProcess?.pid === item.pid;
                     return [
-                      <tr
+                      <ResourceRow items={[item]}
                         key={`proc-${item.pid}`}
                         onClick={() => {
                           onStateChange((prev) => ({
@@ -1763,7 +3105,7 @@ export function ProModeWorkspace({
                               displayName={item.displayName}
                               icon={item.icon}
                             />
-                            <span className="truncate font-medium">
+                            <span className="shrink-0 font-medium">
                               {friendlyProcessLabel(item.name, item.displayName)}
                             </span>
                             {item.ports && item.ports.length > 0 && (
@@ -1830,7 +3172,7 @@ export function ProModeWorkspace({
                             selected,
                           )}
                         </td>
-                      </tr>,
+                      </ResourceRow>,
                     ];
                   }
 
@@ -1842,7 +3184,7 @@ export function ProModeWorkspace({
                   const groupRowSelected = !isExpanded && containsSelected;
 
                   const groupHeaderRow = (
-                    <tr
+                    <ResourceRow items={group.items}
                       key={`group-${group.key}`}
                       onClick={() => {
                         if (containsSelected) {
@@ -1889,7 +3231,7 @@ export function ProModeWorkspace({
                             displayName={group.title}
                             icon={group.icon}
                           />
-                          <span className="truncate font-medium">{group.title}</span>
+                          <span className="shrink-0 font-medium">{group.title}</span>
                           <span
                             className={`shrink-0 tabular-nums ${
                               groupRowSelected
@@ -1962,7 +3304,7 @@ export function ProModeWorkspace({
                           groupRowSelected,
                         )}
                       </td>
-                    </tr>
+                    </ResourceRow>
                   );
 
                   if (!isExpanded) {
@@ -1972,7 +3314,7 @@ export function ProModeWorkspace({
                   const childRows = group.items.map((item) => {
                     const childSelected = selectedProcess?.pid === item.pid;
                     return (
-                      <tr
+                      <ResourceRow items={[item]}
                         key={`proc-${item.pid}`}
                         onClick={() => {
                           onStateChange((prev) => ({
@@ -1994,7 +3336,7 @@ export function ProModeWorkspace({
                               displayName={item.displayName}
                               icon={item.icon || group.icon}
                             />
-                            <span className="truncate">{item.name}</span>
+                            <span className="shrink-0">{item.name}</span>
                             {item.ports && item.ports.length > 0 && (
                               <span
                                 className={`shrink-0 font-mono text-[11px] ${
@@ -2069,7 +3411,7 @@ export function ProModeWorkspace({
                             childSelected,
                           )}
                         </td>
-                      </tr>
+                      </ResourceRow>
                     );
                   });
 
@@ -2077,7 +3419,7 @@ export function ProModeWorkspace({
                 })}
                 {filteredProcesses.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
                       {m.noProcessesMatch}
                     </td>
                   </tr>
@@ -2103,13 +3445,14 @@ export function ProModeWorkspace({
                   </Button>
                 </div>
               ) : (
-                <table className="w-full table-fixed border-collapse text-left text-xs">
+                <table className="w-max min-w-full shrink-0 table-auto border-collapse whitespace-nowrap text-left text-xs">
                   <thead className="sticky top-0 z-10 border-b border-border bg-surface-sunken text-muted-foreground">
                     <tr className="h-8">
+                      <ResourceSelectAll items={filteredPorts} />
                       <th className="w-40 px-3 py-1.5 font-medium">{m.colLocalAddress}</th>
                       <th className="w-24 px-2.5 py-1.5 font-medium">{m.colProtocol}</th>
                       <th className="w-24 px-2.5 py-1.5 font-medium">{m.colState}</th>
-                      <th className="px-3 py-1.5 font-medium">{m.colProcessPid}</th>
+                      <th className="min-w-48 px-3 py-1.5 font-medium">{m.colProcessPid}</th>
                       <th className="w-52 px-3 py-1.5 font-medium">{m.colProjectWorkspace}</th>
                     </tr>
                   </thead>
@@ -2117,7 +3460,7 @@ export function ProModeWorkspace({
                     {filteredPorts.map((item) => {
                       const selected = selectedPort?.id === item.id;
                       return (
-                        <tr
+                        <ResourceRow items={[item]}
                           key={item.id}
                           onClick={() => {
                             onStateChange((prev) => ({
@@ -2132,7 +3475,7 @@ export function ProModeWorkspace({
                               : "hover:bg-surface-sunken/70"
                           }`}
                         >
-                          <td className="truncate px-3 py-1.5 font-mono font-medium">
+                          <td className="px-3 py-1.5 font-mono font-medium">
                             {item.localAddress}
                           </td>
                           <td
@@ -2194,12 +3537,12 @@ export function ProModeWorkspace({
                               selected,
                             )}
                           </td>
-                        </tr>
+                        </ResourceRow>
                       );
                     })}
                     {filteredPorts.length === 0 && !loading && (
                       <tr>
-                        <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
+                        <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
                           {m.noPortOccupancy}
                         </td>
                       </tr>
@@ -2211,94 +3554,95 @@ export function ProModeWorkspace({
           )}
 
           {state.subview === "files" && (
-            <table className="w-full table-fixed border-collapse text-left text-xs">
-              <thead className="sticky top-0 z-10 border-b border-border bg-surface-sunken text-muted-foreground">
-                <tr className="h-8">
-                  <th className="px-3 py-1.5 font-medium">{m.colHolderProcess}</th>
-                  <th className="w-20 px-2.5 py-1.5 text-right font-medium">{m.colPid}</th>
-                  <th className="w-36 px-2.5 py-1.5 font-medium">{m.colUser}</th>
-                  <th className="w-28 px-2.5 py-1.5 font-medium">{m.colFileRef}</th>
-                  <th className="w-52 px-3 py-1.5 font-medium">{m.colOwnership}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {fileData.items.map((item) => {
-                  const selected = selectedFileHandle?.id === item.id;
-                  return (
-                    <tr
-                      key={item.id}
-                      onClick={() => {
-                        onStateChange((prev) => ({
-                          ...prev,
-                          files: { ...prev.files, selectedId: item.id },
-                        }));
-                        setNarrowDetailOpen(true);
-                      }}
-                      className={`h-9 cursor-pointer select-none transition-colors ${
-                        selected
-                          ? "bg-selected text-selected-foreground"
-                          : "hover:bg-surface-sunken/70"
-                      }`}
-                    >
-                      <td className="px-3 py-1.5">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <ProcessIcon
-                            name={item.processName}
-                            displayName={item.processDisplayName}
-                            icon={item.processIcon}
-                          />
-                          <span className="truncate font-medium">
-                            {item.processName
-                              ? friendlyProcessLabel(item.processName, item.processDisplayName)
-                              : m.processExited}
-                          </span>
-                        </div>
-                      </td>
-                      <td
-                        className={`px-2.5 py-1.5 text-right font-mono tabular-nums ${
-                          selected ? "text-selected-foreground/90" : "text-muted-foreground"
+            <>
+              <table className="w-max min-w-full shrink-0 table-auto border-collapse whitespace-nowrap text-left text-xs">
+                <thead className="sticky top-0 z-10 border-b border-border bg-surface-sunken text-muted-foreground">
+                  <tr className="h-8">
+                    <ResourceSelectAll items={fileData.items} />
+                    <th className="min-w-48 px-3 py-1.5 font-medium">{m.colHolderProcess}</th>
+                    <th className="w-20 min-w-20 px-2.5 py-1.5 text-right font-medium">{m.colPid}</th>
+                    <th className="w-36 min-w-36 px-2.5 py-1.5 font-medium">{m.colUser}</th>
+                    <th className="w-28 min-w-28 px-2.5 py-1.5 font-medium">{m.colFileRef}</th>
+                    <th className="w-52 min-w-52 px-3 py-1.5 font-medium">{m.colOwnership}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {fileData.items.map((item) => {
+                    const selected = selectedFileHandle?.id === item.id;
+                    return (
+                      <ResourceRow items={[item]}
+                        key={item.id}
+                        onClick={() => {
+                          onStateChange((prev) => ({
+                            ...prev,
+                            files: { ...prev.files, selectedId: item.id },
+                          }));
+                          setNarrowDetailOpen(true);
+                        }}
+                        className={`h-9 cursor-pointer select-none transition-colors ${
+                          selected
+                            ? "bg-selected text-selected-foreground"
+                            : "hover:bg-surface-sunken/70"
                         }`}
                       >
-                        {item.pid}
-                      </td>
-                      <td
-                        className={`truncate px-2.5 py-1.5 font-mono ${
-                          selected ? "text-selected-foreground/85" : "text-muted-foreground"
-                        }`}
-                      >
-                        {item.user || "--"}
-                      </td>
-                      <td className="px-2.5 py-1.5">
-                        <span
-                          className={`inline-flex items-center border px-1.5 py-0.5 text-[11px] leading-none ${
-                            selected
-                              ? "border-selected-foreground/30 text-selected-foreground"
-                              : "border-border bg-surface-sunken text-foreground-secondary"
+                        <td className="px-3 py-1.5">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <ProcessIcon
+                              name={item.processName}
+                              displayName={item.processDisplayName}
+                              icon={item.processIcon}
+                            />
+                            <span className="truncate font-medium">
+                              {item.processName
+                                ? friendlyProcessLabel(item.processName, item.processDisplayName)
+                                : m.processExited}
+                            </span>
+                          </div>
+                        </td>
+                        <td
+                          className={`px-2.5 py-1.5 text-right font-mono tabular-nums ${
+                            selected ? "text-selected-foreground/90" : "text-muted-foreground"
                           }`}
                         >
-                          {m.refOpenFile}
-                        </span>
-                      </td>
-                      <td className="px-3 py-1.5">
-                        {renderProjectCell(
-                          item.ownership,
-                          item.projectName,
-                          item.workspaceName,
-                          selected,
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {fileData.items.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
-                      {fileData.queriedPath ? m.noFileOccupancy : m.enterFileOrFolderPrompt}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                          {item.pid}
+                        </td>
+                        <td
+                          className={`truncate px-2.5 py-1.5 font-mono ${
+                            selected ? "text-selected-foreground/85" : "text-muted-foreground"
+                          }`}
+                        >
+                          {item.user || "--"}
+                        </td>
+                        <td className="px-2.5 py-1.5">
+                          <span
+                            className={`inline-flex items-center border px-1.5 py-0.5 text-[11px] leading-none ${
+                              selected
+                                ? "border-selected-foreground/30 text-selected-foreground"
+                                : "border-border bg-surface-sunken text-foreground-secondary"
+                            }`}
+                          >
+                            {m.refOpenFile}
+                          </span>
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {renderProjectCell(
+                            item.ownership,
+                            item.projectName,
+                            item.workspaceName,
+                            selected,
+                          )}
+                        </td>
+                      </ResourceRow>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {fileData.items.length === 0 && !loading && (
+                <div className="sticky left-0 w-full shrink-0 px-4 py-12 text-center text-xs text-muted-foreground">
+                  {fileData.queriedPath ? m.noFileOccupancy : m.enterFileOrFolderPrompt}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -2310,14 +3654,198 @@ export function ProModeWorkspace({
         >
           {narrowDetailOpen && (
             <div className="mb-3 @min-[63rem]/desktop:hidden">
-              <Button variant="ghost" size="xs" onClick={() => setNarrowDetailOpen(false)}>
-                <ArrowLeft className="size-3.5" aria-hidden="true" />
-                {m.back}
+              <Button variant="ghost" size="icon-sm" onClick={() => setNarrowDetailOpen(false)} aria-label={m.back} title={m.back}>
+                <ArrowLeft className="size-4" aria-hidden="true" />
               </Button>
             </div>
           )}
 
-          {(state.subview === "home" || state.subview === "processes") && selectedProcess && (
+          <div className="mb-3"><ResourceActions items={state.subview === "ports" ? selectedPort ? [selectedPort] : [] : state.subview === "files" ? selectedFileHandle ? [selectedFileHandle] : [] : selectedProcess ? [selectedProcess] : []} /></div>
+          {state.subview === "home" && bountyMode === "peaks" && selectedPeakEvent && (
+            <div className="space-y-4">
+              <div className="space-y-2 border-b border-border pb-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <ProcessIcon
+                      name={selectedPeakEvent.processName}
+                      displayName={selectedPeakEvent.title}
+                      icon={selectedPeakEvent.icon}
+                      size="md"
+                    />
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold">
+                        {selectedPeakEvent.title}
+                      </h3>
+                      {selectedPeakEvent.processName &&
+                        selectedPeakEvent.processName.toLowerCase() !==
+                          selectedPeakEvent.title.toLowerCase() && (
+                          <div className="truncate font-mono text-[11px] text-muted-foreground">
+                            {selectedPeakEvent.processName}
+                          </div>
+                        )}
+                    </div>
+                  </div>
+                  {ownershipBadge(selectedPeakEvent.ownership, m)}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
+                  <span className="font-mono tabular-nums">PID {selectedPeakEvent.pid}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-5 text-muted-foreground hover:text-foreground"
+                    onClick={() => onCopy(String(selectedPeakEvent.pid))}
+                    aria-label={m.copyPid}
+                    title={m.copyPid}
+                  >
+                    <Copy className="size-3" aria-hidden="true" />
+                  </Button>
+                  <span>·</span>
+                  <span>
+                    {selectedPeakEvent.processExited ? m.processExited : m.running}
+                  </span>
+                  <span>·</span>
+                  <span className="font-mono tabular-nums">
+                    {formatObservedTime(selectedPeakEvent.peakAt, locale)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-px border border-border bg-border text-xs">
+                <div className="bg-surface-sunken/50 px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+                    <span>{m.colCpu}</span>
+                    {selectedPeakEvent.category === "cpu" &&
+                      (selectedPeakEvent.deltaValue ?? 0) > 0 && (
+                        <span className="font-mono text-[10px] text-warning-foreground">
+                          ↑ +{Math.round(selectedPeakEvent.deltaValue!)}%
+                        </span>
+                      )}
+                  </div>
+                  <div className="mt-0.5 font-mono font-semibold tabular-nums">
+                    {selectedPeakEvent.cpuPercent != null
+                      ? `${selectedPeakEvent.cpuPercent.toFixed(1)}%`
+                      : "--"}
+                  </div>
+                </div>
+                <div className="bg-surface-sunken/50 px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+                    <span>{m.colMemory}</span>
+                    {selectedPeakEvent.category === "memory" &&
+                      (selectedPeakEvent.deltaValue ?? 0) > 0 && (
+                        <span className="font-mono text-[10px] text-warning-foreground">
+                          ↑ +{formatMemory(selectedPeakEvent.deltaValue!)}
+                        </span>
+                      )}
+                  </div>
+                  <div className="mt-0.5 font-mono font-semibold tabular-nums">
+                    {formatMemory(selectedPeakEvent.memoryBytes ?? 0)}
+                  </div>
+                </div>
+                <div className="bg-surface-sunken/50 px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+                    <span>{m.colGpu}</span>
+                    {(selectedPeakEvent.gpuMemoryBytes ?? 0) > 0 && (
+                      <span className="font-mono text-[10px] tabular-nums">
+                        {m.gpuMemoryLabel} {formatMemory(selectedPeakEvent.gpuMemoryBytes!)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 font-mono font-semibold tabular-nums">
+                    {selectedPeakEvent.gpuPercent != null
+                      ? `${selectedPeakEvent.gpuPercent.toFixed(1)}%`
+                      : "--"}
+                  </div>
+                </div>
+                <div className="bg-surface-sunken/50 px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+                    <span>{m.colNetwork}</span>
+                    {(selectedPeakEvent.cumulativeBytes ?? 0) > 0 && (
+                      <span className="font-mono text-[10px] tabular-nums">
+                        {m.bountyCumulativePrefix} {formatMemory(selectedPeakEvent.cumulativeBytes!)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 font-mono font-semibold tabular-nums">
+                    {formatNetworkRate(selectedPeakEvent.networkBytesPerSec, false, m)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">{m.commandText}</span>
+                  {selectedPeakEvent.commandLine && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-5 text-muted-foreground hover:text-foreground"
+                      onClick={() => onCopy(selectedPeakEvent.commandLine!)}
+                      aria-label={m.copyCommand}
+                      title={m.copyCommand}
+                    >
+                      <Copy className="size-3" aria-hidden="true" />
+                    </Button>
+                  )}
+                </div>
+                <pre className="max-h-36 overflow-auto whitespace-pre-wrap break-all border border-border/60 bg-surface-sunken p-2.5 font-mono text-[11px] leading-5">
+                  {renderCommandLineText(
+                    selectedPeakEvent.commandLine,
+                    selectedPeakEvent.commandLineState,
+                  )}
+                </pre>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() =>
+                    openWatchDialogFor({
+                      title: selectedPeakEvent.title,
+                      name: selectedPeakEvent.processName,
+                      executable: selectedPeakEvent.executable,
+                      commandId: selectedPeakEvent.commandId,
+                      projectId: selectedPeakEvent.projectId,
+                      projectName: selectedPeakEvent.projectName,
+                      defaultCategory: selectedPeakEvent.category,
+                    })
+                  }
+                >
+                  <Bell className="size-3.5" aria-hidden="true" />
+                  {m.bountyAddWatch}
+                </Button>
+                {selectedPeakEvent.projectId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() =>
+                      onOpenWorkspace(selectedPeakEvent.projectId!, selectedPeakEvent.workspaceId)
+                    }
+                  >
+                    <FolderOpen className="size-3.5" aria-hidden="true" />
+                    {m.viewWorkspace}
+                  </Button>
+                )}
+                {selectedPeakEvent.executable && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => openExecutableDirectory(selectedPeakEvent.executable)}
+                  >
+                    <FolderOpen className="size-3.5" aria-hidden="true" />
+                    {m.openProgramDir}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(state.subview === "home" || state.subview === "processes") &&
+            selectedProcess &&
+            !(state.subview === "home" && bountyMode === "peaks" && selectedPeakEvent) && (
             <div className="space-y-4">
               <div className="space-y-2 border-b border-border pb-3">
                 <div className="flex items-start justify-between gap-2">
@@ -2403,6 +3931,7 @@ export function ProModeWorkspace({
                 const netConns = useGroupTotals
                   ? selectedGroup!.totalNetworkConnections
                   : selectedProcess.networkConnections ?? 0;
+                const cumNet = selectedGroup?.cumulativeNetBytes ?? 0;
                 const netVal = formatNetworkRate(netRate, netSampling, m);
 
                 return (
@@ -2429,10 +3958,16 @@ export function ProModeWorkspace({
                     <div className="bg-surface-sunken/50 px-2.5 py-2">
                       <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
                         <span>{m.colNetwork}</span>
-                        {netConns > 0 && (
+                        {cumNet > 0 ? (
                           <span className="font-mono text-[10px] tabular-nums">
-                            {netConns} {m.networkConnectionsUnit}
+                            {m.bountyCumulativePrefix} {formatMemory(cumNet)}
                           </span>
+                        ) : (
+                          netConns > 0 && (
+                            <span className="font-mono text-[10px] tabular-nums">
+                              {netConns} {m.networkConnectionsUnit}
+                            </span>
+                          )
                         )}
                       </div>
                       <div className="mt-0.5 font-mono font-semibold tabular-nums">{netVal}</div>
@@ -2529,9 +4064,31 @@ export function ProModeWorkspace({
               </div>
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() =>
+                    openWatchDialogFor({
+                      title:
+                        selectedGroup?.title ||
+                        friendlyProcessLabel(selectedProcess.name, selectedProcess.displayName),
+                      name: selectedProcess.name,
+                      executable: selectedProcess.executable,
+                      commandId: selectedProcess.commandId,
+                      projectId: selectedProcess.projectId,
+                      projectName: selectedProcess.projectName,
+                      defaultCategory:
+                        (selectedProcess.networkBytesPerSec ?? 0) > 0 ? "network" : "memory",
+                    })
+                  }
+                >
+                  <Bell className="size-3.5" aria-hidden="true" />
+                  {m.bountyAddWatch}
+                </Button>
                 {selectedProcess.runId && (
                   <Button
-                    size="sm"
+                    size="icon-sm"
                     className="h-8 text-xs"
                     onClick={() =>
                       onOpenRun(selectedProcess.runId!, {
@@ -2547,9 +4104,10 @@ export function ProModeWorkspace({
                         reviewStatus: "active",
                       })
                     }
+                    aria-label={m.viewRun}
+                    title={m.viewRun}
                   >
-                    <FileText className="size-3.5" aria-hidden="true" />
-                    {m.viewRun}
+                    <FileText className="size-4" aria-hidden="true" />
                   </Button>
                 )}
                 {selectedProcess.projectId && (
@@ -2684,7 +4242,7 @@ export function ProModeWorkspace({
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 {selectedPort.runId && (
                   <Button
-                    size="sm"
+                    size="icon-sm"
                     className="h-8 text-xs"
                     onClick={() =>
                       onOpenRun(selectedPort.runId!, {
@@ -2701,9 +4259,10 @@ export function ProModeWorkspace({
                         reviewStatus: "active",
                       })
                     }
+                    aria-label={m.viewRun}
+                    title={m.viewRun}
                   >
-                    <FileText className="size-3.5" aria-hidden="true" />
-                    {m.viewRun}
+                    <FileText className="size-4" aria-hidden="true" />
                   </Button>
                 )}
                 {selectedPort.projectId && (
@@ -2837,7 +4396,7 @@ export function ProModeWorkspace({
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 {selectedFileHandle.runId && (
                   <Button
-                    size="sm"
+                    size="icon-sm"
                     className="h-8 text-xs"
                     onClick={() =>
                       onOpenRun(selectedFileHandle.runId!, {
@@ -2855,9 +4414,10 @@ export function ProModeWorkspace({
                         reviewStatus: "active",
                       })
                     }
+                    aria-label={m.viewRun}
+                    title={m.viewRun}
                   >
-                    <FileText className="size-3.5" aria-hidden="true" />
-                    {m.viewRun}
+                    <FileText className="size-4" aria-hidden="true" />
                   </Button>
                 )}
                 {(selectedFileHandle.executable || selectedFileHandle.targetFile) && (
@@ -2880,7 +4440,9 @@ export function ProModeWorkspace({
             </div>
           )}
 
-          {(((state.subview === "home" || state.subview === "processes") && !selectedProcess) ||
+          {(((state.subview === "home" || state.subview === "processes") &&
+            !selectedProcess &&
+            !(state.subview === "home" && bountyMode === "peaks" && selectedPeakEvent)) ||
             (state.subview === "ports" && !selectedPort) ||
             (state.subview === "files" && !selectedFileHandle)) && (
             <div className="flex flex-1 items-center justify-center text-muted-foreground">
@@ -2921,8 +4483,8 @@ export function ProModeWorkspace({
       )}
 
       {/* Status Footer */}
-      <footer className="flex h-8 shrink-0 items-center justify-between gap-2 border-t border-border bg-surface-sunken px-4 text-[11px] text-muted-foreground">
-        <div className="flex items-center gap-2 truncate">
+      <footer className="flex min-h-8 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border bg-surface-sunken px-2 py-1 text-[11px] text-muted-foreground @min-[36rem]/desktop:px-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span className="tabular-nums">
             {activeStats.total}{" "}
             {state.subview === "ports" ? m.portCountUnit : m.processCountUnit}
@@ -2938,10 +4500,182 @@ export function ProModeWorkspace({
               : m.coverageComplete}
           </span>
         </div>
-        <div className="shrink-0 tabular-nums">
+        <div className="shrink-0 whitespace-nowrap tabular-nums">
           {m.observedAtLabel} {formatObservedTime(activeStats.observedAt, locale)}
         </div>
       </footer>
+
+      <Dialog open={watchDialogOpen} onOpenChange={setWatchDialogOpen}>
+        <DialogContent className="max-w-md gap-4 p-4 text-xs">
+          <div className="space-y-1">
+            <DialogTitle className="text-sm font-semibold">{m.bountyCreateWatch}</DialogTitle>
+            <DialogDescription className="sr-only">{m.bountyCreateWatch}</DialogDescription>
+          </div>
+
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="block font-medium text-foreground-secondary">
+                {m.bountyWatchTarget}
+              </label>
+              <Input
+                value={watchDraft.targetName}
+                onChange={(e) =>
+                  setWatchDraft((prev) => ({
+                    ...prev,
+                    targetName: e.target.value,
+                    title: e.target.value,
+                  }))
+                }
+                placeholder={m.bountyWatchTarget}
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="block font-medium text-foreground-secondary">
+                {m.bountyWatchCondition}
+              </span>
+              <div className="grid grid-cols-4 gap-1.5">
+                {(
+                  [
+                    ["network", m.colNetwork],
+                    ["memory", m.colMemory],
+                    ["cpu", m.colCpu],
+                    ["gpu", m.colGpu],
+                  ] as const
+                ).map(([cat, label]) => {
+                  const active = watchDraft.category === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => {
+                        const nextCond =
+                          cat !== "network" && watchDraft.conditionKind === "cumulative"
+                            ? "threshold"
+                            : watchDraft.conditionKind;
+                        setWatchDraft((prev) => ({
+                          ...prev,
+                          category: cat,
+                          conditionKind: nextCond,
+                          threshold: defaultThresholdFor(cat, nextCond),
+                        }));
+                      }}
+                      className={`h-7 border px-2 font-medium transition-colors ${
+                        active
+                          ? "border-selected bg-selected text-selected-foreground"
+                          : "border-border bg-surface text-foreground-secondary hover:bg-accent"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {(
+                  [
+                    ["threshold", m.bountyConditionThreshold],
+                    ["rapid_rise", m.bountyConditionRapidRise],
+                    ...(watchDraft.category === "network"
+                      ? ([["cumulative", m.bountyConditionCumulative]] as const)
+                      : []),
+                  ] as Array<["threshold" | "rapid_rise" | "cumulative", string]>
+                ).map(([cond, label]) => {
+                  const active = watchDraft.conditionKind === cond;
+                  return (
+                    <button
+                      key={cond}
+                      type="button"
+                      onClick={() =>
+                        setWatchDraft((prev) => ({
+                          ...prev,
+                          conditionKind: cond,
+                          threshold: defaultThresholdFor(prev.category, cond),
+                        }))
+                      }
+                      className={`h-7 border px-2.5 font-medium transition-colors ${
+                        active
+                          ? "border-selected bg-selected text-selected-foreground"
+                          : "border-border bg-surface text-foreground-secondary hover:bg-accent"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="block font-medium text-foreground-secondary">
+                {m.bountyThresholdLabel}
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {thresholdPresetsFor(watchDraft.category, watchDraft.conditionKind, m).map(
+                  (preset) => {
+                    const active = Math.abs(watchDraft.threshold - preset.value) < 1;
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() =>
+                          setWatchDraft((prev) => ({ ...prev, threshold: preset.value }))
+                        }
+                        className={`h-7 border px-2.5 font-mono text-[11px] tabular-nums transition-colors ${
+                          active
+                            ? "border-selected bg-selected font-semibold text-selected-foreground"
+                            : "border-border bg-surface text-foreground-secondary hover:bg-accent"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 pt-1 text-xs text-foreground-secondary">
+              <Checkbox
+                checked={watchDraft.notifyToast}
+                onCheckedChange={(checked) => {
+                  const next = checked === true;
+                  if (
+                    next &&
+                    typeof Notification !== "undefined" &&
+                    Notification.permission === "default"
+                  ) {
+                    void Notification.requestPermission();
+                  }
+                  setWatchDraft((prev) => ({ ...prev, notifyToast: next }));
+                }}
+              />
+              <span>{m.bountyNotifySystem}</span>
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-border pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setWatchDialogOpen(false)}
+            >
+              {m.cancel}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!watchDraft.targetName.trim()}
+              onClick={() => void submitWatchDraft()}
+            >
+              {m.save}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+    </ResourceActionsProvider>
   );
 }

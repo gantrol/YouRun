@@ -252,7 +252,7 @@ export function ProjectSettings({
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="icon-sm"
               disabled={project.buttons.length >= maxLaunchButtons}
               title={
                 project.buttons.length >= maxLaunchButtons
@@ -266,9 +266,9 @@ export function ProjectSettings({
                     buttons: [...project.buttons, newLaunchButton()],
                   });
               }}
+              aria-label={m.addButton}
             >
               <Plus className="size-4" aria-hidden="true" />
-              {m.addButton}
             </Button>
           </div>
         </div>
@@ -416,18 +416,18 @@ export function ProjectSettings({
         />
       </section>}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-        <Button variant="ghost" size="sm" onClick={() => onChange({ ...project, hidden: !project.hidden })}>
+        <Button variant="ghost" size="icon-sm" onClick={() => onChange({ ...project, hidden: !project.hidden })} aria-label={project.hidden ? m.show : m.hide} title={project.hidden ? m.show : m.hide}>
           {project.hidden ? <Eye className="size-4" aria-hidden="true" /> : <EyeOff className="size-4" aria-hidden="true" />}
-          {project.hidden ? m.show : m.hide}
         </Button>
         <Button
           variant="ghost"
-          size="sm"
+          size="icon-sm"
           className="text-destructive hover:text-destructive"
           onClick={onDelete}
+          aria-label={m.deleteProject}
+          title={m.deleteProject}
         >
           <Trash2 className="size-4" aria-hidden="true" />
-          {m.deleteProject}
         </Button>
       </div>
     </div>
@@ -585,9 +585,8 @@ export function GlobalSettings({
           title={m.projects}
           count={numberFormat.format(projects.length)}
           action={
-            <Button variant="ghost" size="sm" onClick={onOpenProject} data-navigation-key="settings:open-project">
+            <Button variant="ghost" size="icon-sm" onClick={onOpenProject} data-navigation-key="settings:open-project" aria-label={m.openProject} title={m.openProject}>
               <FolderOpen className="size-4" aria-hidden="true" />
-              {m.openProject}
             </Button>
           }
         >
@@ -606,9 +605,8 @@ export function GlobalSettings({
           title={m.independentCommands}
           count={numberFormat.format(independentCommands.length)}
           action={
-            <Button variant="ghost" size="sm" onClick={onNewCommand} data-navigation-key="settings:new-command">
+            <Button variant="ghost" size="icon-sm" onClick={onNewCommand} data-navigation-key="settings:new-command" aria-label={m.newCommand} title={m.newCommand}>
               <Plus className="size-4" aria-hidden="true" />
-              {m.newCommand}
             </Button>
           }
         >

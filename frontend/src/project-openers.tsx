@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppWindow, ChevronDown, FolderOpen, GitBranch, LoaderCircle, RefreshCw, Terminal } from "lucide-react";
+import { AppWindow, FolderOpen, GitBranch, LoaderCircle, RefreshCw, Terminal } from "lucide-react";
 import { Button } from "@/renderer/components/ui/button";
 import { ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger } from "@/renderer/components/ui/context-menu";
 import { Dialog, DialogContent, DialogTitle } from "@/renderer/components/ui/dialog";
@@ -88,8 +88,8 @@ export function ProjectOpenersDropdown(props: ProjectOpenersProps) {
     if (open) { customSelected.current = false; props.openers.refresh(false); }
   }}>
     <DropdownMenuTrigger asChild>
-      <Button ref={trigger} type="button" variant="outline" size="sm" disabled={props.disabled}>
-        <FolderOpen className="size-4" aria-hidden="true" />{props.m.openProjectWith}<ChevronDown className="size-3.5" aria-hidden="true" />
+      <Button ref={trigger} type="button" variant="outline" size="icon-sm" aria-label={props.m.openProjectWith} title={props.m.openProjectWith} disabled={props.disabled}>
+        <FolderOpen className="size-4" aria-hidden="true" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" onCloseAutoFocus={(event) => {

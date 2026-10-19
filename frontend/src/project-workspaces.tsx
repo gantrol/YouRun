@@ -305,39 +305,42 @@ export function ProjectWorkspacesManager({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="xs"
+                      size="icon-sm"
                       disabled={busy}
                       onClick={() => {
                         setEditingId(ws.id);
                         setEditingName(displayName);
                       }}
+                      aria-label={m.renameWorkspace}
+                      title={m.renameWorkspace}
                     >
-                      <Pencil className="size-3.5" aria-hidden="true" />
-                      {m.renameWorkspace}
+                      <Pencil className="size-4" aria-hidden="true" />
                     </Button>
                     {!ws.isDefault && (
                       <Button
                         type="button"
                         variant="ghost"
-                        size="xs"
+                        size="icon-sm"
                         disabled={busy}
                         onClick={() => void runAction({ action: "setDefault", locationId: ws.id })}
+                        aria-label={m.setAsDefault}
+                        title={m.setAsDefault}
                       >
-                        <Star className="size-3.5" aria-hidden="true" />
-                        {m.setAsDefault}
+                        <Star className="size-4" aria-hidden="true" />
                       </Button>
                     )}
                     {workspaces.length > 1 && (
                       <Button
                         type="button"
                         variant="ghost"
-                        size="xs"
+                        size="icon-sm"
                         disabled={busy}
                         className="text-muted-foreground hover:text-destructive"
                         onClick={() => void runAction({ action: "remove", locationId: ws.id })}
+                        aria-label={m.removeAssociation}
+                        title={m.removeAssociation}
                       >
-                        <Trash2 className="size-3.5" aria-hidden="true" />
-                        {m.removeAssociation}
+                        <Trash2 className="size-4" aria-hidden="true" />
                       </Button>
                     )}
                   </div>

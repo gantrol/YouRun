@@ -173,8 +173,12 @@ export function App({
       open({ kind: "updates" });
       await rebuildSelf();
     },
-    onReplay: (id, nextId) => setPanels((previous) => previous.map((item) =>
-      item.kind === "run" && item.id === id ? { ...item, id: nextId } : item.kind === "command" && item.runId === id ? { ...item, runId: nextId } : item)),
+    onReplay: (id, nextId) => {
+      setPanels((previous) => previous.map((item) =>
+        item.kind === "run" && item.id === id ? { ...item, id: nextId } : item.kind === "command" && item.runId === id ? { ...item, runId: nextId } : item));
+      setRunResourceOrigin(previous => previous?.runId === id ? { ...previous, runId: nextId } : previous);
+      setProState(previous => previous.origin?.runId === id ? { ...previous, origin: { ...previous.origin, runId: nextId } } : previous);
+    },
   });
   const editBaseline = useRef<Command | undefined>(undefined);
   const projectBaseline = useRef<import("./model").Project | undefined>(undefined);
@@ -488,19 +492,17 @@ export function App({
     }
     setDirty(false);
     setLeaving(false);
-    const returningFromProRun =
-      panel?.kind === "run" &&
+    const returningToResources =
       runResourceOrigin &&
-      panel.id === runResourceOrigin.runId;
+      ((panel?.kind === "run" && panel.id === runResourceOrigin.runId) ||
+        (panel?.kind === "command" && panel.id === runResourceOrigin.commandId));
     restorePanelScroll.current = panelScrolls.current.pop() ?? 0;
     setPanels((previous) => previous.slice(0, -1));
     const trigger = triggers.current.pop();
-    if (returningFromProRun) {
+    if (returningToResources) {
       const origin = runResourceOrigin;
-      const stopped =
-        selectedRun &&
-        selectedRun.status !== "running" &&
-        selectedRun.status !== "stopping";
+      const originRun = runs.find(run => run.id === origin.runId);
+      const stopped = !originRun || (originRun.status !== "running" && originRun.status !== "stopping");
       setProState((prev) => ({
         ...prev,
         subview: origin.subview,
@@ -895,6 +897,10 @@ export function App({
             projectDetails={projectDetails.details}
             runs={runs}
             commands={commands}
+            runOperations={runOperations}
+            launchErrors={launchErrors}
+            onReplay={replayRun}
+            onStop={stopRun}
             locale={locale}
             m={m}
             recheckTrigger={proRecheckTrigger}
@@ -915,6 +921,12 @@ export function App({
               }
               setAppMode("launch");
               open({ kind: "projectCommands", id: projectId }, "home");
+            }}
+            onOpenCommand={(commandId, origin) => {
+              setRunResourceOrigin(origin);
+              setProState(prev => ({ ...prev, origin }));
+              setAppMode("launch");
+              open({ kind: "command", id: commandId, view: "launch" }, "home");
             }}
             onCopy={copy}
             onOpenDirectoryPath={openDirectoryPath}

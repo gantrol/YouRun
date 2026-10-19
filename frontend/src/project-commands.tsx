@@ -94,12 +94,13 @@ export function ProjectCommands({
         </h2>
         <Button
           variant="outline"
-          size="sm"
+          size="icon-sm"
+          aria-label={props.m.newCommand}
+          title={props.m.newCommand}
           onClick={onAdd}
           data-navigation-key={`project:${project.id}:add`}
         >
-          <Plus className="size-4" />
-          {props.m.newCommand}
+          <Plus className="size-4" aria-hidden="true" />
         </Button>
         <Button
           variant="ghost"

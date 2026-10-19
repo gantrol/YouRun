@@ -49,6 +49,7 @@ export function CommandPanel({ command, collections = [], onCollection, onAddToC
   function selectView(next: "run" | "launch", id?: string) { setLocalView(next); setRunId(id); onView?.(next, id); }
   const [submitted, setSubmitted] = useState(false);
   const [starting, setStarting] = useState(false);
+  const launchLabel = operation ? m[operation.state] : starting ? m.starting : running ? m.viewRun : command.external ? m.external : m.start;
   const directoryRef = useRef<HTMLInputElement>(null);
   const fieldRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const launchScroll = useRef<HTMLDivElement>(null);
@@ -62,7 +63,7 @@ export function CommandPanel({ command, collections = [], onCollection, onAddToC
         <Button variant={view === "launch" ? "secondary" : "ghost"} size="sm" aria-pressed={view === "launch"} onClick={() => selectView("launch")}>{m.start}</Button>
         <Button variant={view === "run" ? "secondary" : "ghost"} size="sm" disabled={!active} aria-pressed={view === "run"} onClick={() => selectView("run", active?.id)}>{m.outputTab}</Button>
       </div>
-      <Button variant="ghost" size="sm" onClick={onEdit} data-navigation-key={`command:${command.id}:edit`}><Pencil className="size-4"/>{m.edit}</Button>
+      <Button variant="ghost" size="icon-sm" aria-label={m.edit} title={m.edit} onClick={onEdit} data-navigation-key={`command:${command.id}:edit`}><Pencil className="size-4" aria-hidden="true"/></Button>
     </header>
     {view === "run" && active ? <div className="flex min-h-0 flex-1 flex-col gap-3 p-5">
       {runs.length > 1 && <Picker value={active.id} label={m.history} options={runs.map(run => [run.id,
@@ -98,9 +99,9 @@ export function CommandPanel({ command, collections = [], onCollection, onAddToC
       <FormActions contained>
         {!pending && <CommandFailure error={launchError} m={m} onEdit={onEdit}/>}
         {active?.status === "unknown" && <span role="status" className="text-sm text-muted-foreground">{m.unknown}</span>}
-        <Button size="sm" type="submit" disabled={command.unavailable || starting || pending || running?.status === "stopping"} aria-busy={starting || pending}>
-          {starting || pending ? operation?.state === "restarting" ? <RotateCw className="size-4 motion-safe:animate-spin" aria-hidden="true"/> : <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true"/> : running ? <FileText className="size-4"/> : <Play className="size-4"/>}
-          {operation ? m[operation.state] : starting ? m.starting : running ? m.viewRun : command.external ? m.external : m.start}
+        <Button size={command.external ? "sm" : "icon-sm"} type="submit" aria-label={launchLabel} title={launchLabel} disabled={command.unavailable || starting || pending || running?.status === "stopping"} aria-busy={starting || pending}>
+          {starting || pending ? operation?.state === "restarting" ? <RotateCw className="size-4 motion-safe:animate-spin" aria-hidden="true"/> : <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true"/> : running ? <FileText className="size-4" aria-hidden="true"/> : <Play className="size-4" aria-hidden="true"/>}
+          {command.external && launchLabel}
         </Button>
       </FormActions>
     </form>}

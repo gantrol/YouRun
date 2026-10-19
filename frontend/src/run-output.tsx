@@ -47,6 +47,8 @@ export function RunOutput({
   const state = displayedRunState(run, ownOperation) ?? run.status;
   const replaying = !!ownOperation && ownOperation.state !== "stopping";
   const stopping = state === "stopping";
+  const replayLabel = replaying ? m[ownOperation!.state] : run.status === "running" || stopping ? m.restart : m.runAgain;
+  const stopLabel = stopping ? m.stopping : resourceOrigin ? m.stopThisRun : m.stop;
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState("");
   const [output, setOutput] = useState("");
@@ -123,7 +125,7 @@ export function RunOutput({
   }, [run.id, run.omitOutput, m.logMissing]);
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label={m.outputTab}>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-medium">{m.outputTab}</h2>
         <span
           className="flex items-center gap-2 text-xs text-muted-foreground"
@@ -137,42 +139,43 @@ export function RunOutput({
           </span>
           <RunStatus state={state} m={m} />
         </span>
-        {onEdit && showEditAction && <Button variant="ghost" size="sm" onClick={onEdit} data-navigation-key={`run:${run.id}:edit`}>
-          <Pencil className="size-4" aria-hidden="true" />{m.editCommand}
-        </Button>}
-        {onReplay && run.status !== "unknown" && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-w-28"
-            disabled={pending || stopping}
-            aria-busy={replaying}
-            onClick={async () => {
-              setLocalOperation({ state: run.status === "running" ? "restarting" : "starting", runId: run.id, previousRunId: run.id });
-              try {
-                await onReplay(run.id);
-              } finally {
-                setLocalOperation(undefined);
-              }
-            }}
-          >
-            {replaying ? ownOperation?.state === "restarting" ? <RotateCw className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : run.status === "running" || stopping ? (
-              <RotateCw className="size-4" aria-hidden="true" />
-            ) : (
-              <Play className="size-4" aria-hidden="true" />
-            )}
-            {replaying ? m[ownOperation!.state] : run.status === "running" || stopping ? m.restart : m.runAgain}
-          </Button>
-        )}
-        {onStop && <span className="inline-flex min-w-24">{run.status === "running" || stopping ? (
-          <Button variant="outline" size="sm" className="min-w-24" disabled={pending || stopping} aria-busy={stopping} onClick={async () => {
-            setLocalOperation({ state: "stopping", runId: run.id, previousRunId: run.id });
-            try { await onStop(run.id); } finally { setLocalOperation(undefined); }
-          }}>
-            {stopping ? <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : <Square className="size-4" aria-hidden="true" />}
-            {stopping ? m.stopping : resourceOrigin ? m.stopThisRun : m.stop}
-          </Button>
-        ) : null}</span>}
+        <div className="ml-auto flex items-center gap-2">
+          {onEdit && showEditAction && <Button variant="ghost" size="icon-sm" aria-label={m.editCommand} title={m.editCommand} onClick={onEdit} data-navigation-key={`run:${run.id}:edit`}>
+            <Pencil className="size-4" aria-hidden="true" />
+          </Button>}
+          {onReplay && run.status !== "unknown" && (
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label={replayLabel}
+              title={replayLabel}
+              disabled={pending || stopping}
+              aria-busy={replaying}
+              onClick={async () => {
+                setLocalOperation({ state: run.status === "running" ? "restarting" : "starting", runId: run.id, previousRunId: run.id });
+                try {
+                  await onReplay(run.id);
+                } finally {
+                  setLocalOperation(undefined);
+                }
+              }}
+            >
+              {replaying ? ownOperation?.state === "restarting" ? <RotateCw className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : run.status === "running" || stopping ? (
+                <RotateCw className="size-4" aria-hidden="true" />
+              ) : (
+                <Play className="size-4" aria-hidden="true" />
+              )}
+            </Button>
+          )}
+          {onStop && (run.status === "running" || stopping) && (
+            <Button variant="outline" size="icon-sm" aria-label={stopLabel} title={stopLabel} disabled={pending || stopping} aria-busy={stopping} onClick={async () => {
+              setLocalOperation({ state: "stopping", runId: run.id, previousRunId: run.id });
+              try { await onStop(run.id); } finally { setLocalOperation(undefined); }
+            }}>
+              {stopping ? <LoaderCircle className="size-4 motion-safe:animate-spin" aria-hidden="true" /> : <Square className="size-4" aria-hidden="true" />}
+            </Button>
+          )}
+        </div>
       </div>
       {resourceOrigin && run.status !== "running" && !stopping && (
         <div
@@ -244,12 +247,12 @@ export function RunOutput({
       )}
       {run.status === "unknown" && <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span role="status">{m.runOutcomeUnknown}</span>
-        {onRecheck && <Button variant="outline" size="sm" disabled={checking || pending} aria-busy={checking} onClick={async () => {
+        {onRecheck && <Button variant="outline" size="icon-sm" aria-label={m.recheckRun} title={m.recheckRun} disabled={checking || pending} aria-busy={checking} onClick={async () => {
           setChecking(true); setCheckError("");
           try { await onRecheck(); }
           catch { setCheckError(m.connectionLost); }
           finally { setChecking(false); }
-        }}><RotateCw className={`size-4 ${checking ? "motion-safe:animate-spin" : ""}`} aria-hidden="true"/>{m.recheckRun}</Button>}
+        }}><RotateCw className={`size-4 ${checking ? "motion-safe:animate-spin" : ""}`} aria-hidden="true"/></Button>}
         {checkError && <span role="alert" className="text-destructive">{checkError}</span>}
       </div>}
       {!pending && <CommandFailure error={launchError} run={run} m={m} onEdit={onEdit} />}
