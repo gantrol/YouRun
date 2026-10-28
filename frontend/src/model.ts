@@ -124,3 +124,24 @@ export function clearCommandBindings(
         },
   );
 }
+
+export function setCommandHomeButton(projects: Project[], command: Command, visible: boolean) {
+  if (!command.project) return projects;
+  const owner = projects.find(project => project.id === command.project);
+  if (!owner) throw new Error("projectMissing");
+  const bound = owner.buttons.find(button => button.commandId === command.id);
+  const slot = bound ?? (visible ? owner.buttons.find(button => !button.commandId) : undefined);
+  if (!visible && !bound) return projects;
+  if (visible && !slot && owner.buttons.length >= maxLaunchButtons) throw new Error("buttonLimit");
+  const button: LaunchButton = {
+    ...(slot ?? newLaunchButton(command.id)),
+    commandId: command.id,
+    icon: visible ? command.icon ?? "play" : bound!.icon,
+    hidden: !visible,
+  };
+  return projects.map(project => project.id !== owner.id ? project : {
+    ...project,
+    hidden: visible ? false : project.hidden,
+    buttons: slot ? project.buttons.map(item => item.id === slot.id ? button : item) : [...project.buttons, button],
+  });
+}

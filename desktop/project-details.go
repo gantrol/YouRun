@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -422,6 +424,72 @@ func (h *Host) serveOpenProject(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if err := openProjectDirectory(directory); err != nil {
 		fail(500, "projectOpenFailed")
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+func normalizeExternalURL(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || len(trimmed) > 2048 {
+		return "", errors.New("invalidRequest")
+	}
+	for _, ch := range trimmed {
+		if ch < 0x20 || ch == 0x7f {
+			return "", errors.New("invalidRequest")
+		}
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil {
+		return "", errors.New("invalidRequest")
+	}
+	hostname := parsed.Hostname()
+	if hostname == "" {
+		return "", errors.New("invalidRequest")
+	}
+	port := parsed.Port()
+	if hostname == "0.0.0.0" {
+		if port != "" {
+			parsed.Host = net.JoinHostPort("127.0.0.1", port)
+		} else {
+			parsed.Host = "127.0.0.1"
+		}
+	} else if hostname == "::" {
+		if port != "" {
+			parsed.Host = net.JoinHostPort("localhost", port)
+		} else {
+			parsed.Host = "localhost"
+		}
+	}
+	return parsed.String(), nil
+}
+
+func (h *Host) serveOpenURL(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	fail := func(status int, code string) {
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(map[string]string{"error": code})
+	}
+	if r.Method != http.MethodPost {
+		fail(http.StatusMethodNotAllowed, "invalidRequest")
+		return
+	}
+	var request struct {
+		URL string `json:"url"`
+	}
+	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	d.DisallowUnknownFields()
+	if d.Decode(&request) != nil || d.Decode(&struct{}{}) != io.EOF {
+		fail(http.StatusBadRequest, "invalidRequest")
+		return
+	}
+	target, err := normalizeExternalURL(request.URL)
+	if err != nil {
+		fail(http.StatusBadRequest, "invalidRequest")
+		return
+	}
+	if err := openExternalURL(target); err != nil {
+		fail(http.StatusInternalServerError, "urlOpenFailed")
 		return
 	}
 	json.NewEncoder(w).Encode(map[string]bool{"ok": true})

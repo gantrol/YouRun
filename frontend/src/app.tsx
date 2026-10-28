@@ -690,11 +690,11 @@ export function App({
     }
     launch(command, directory, inputs[command.id] ?? {});
   }
-  async function saveCommand(command: Command) {
+  async function saveCommand(command: Command, showOnHome?: boolean) {
     if (panel?.kind === "editCommand" && !commands.some(c => c.id === command.id)) throw new Error("commandMissing");
     const previous = commands.find((item) => item.id === command.id);
     await submit(async () => {
-      await persistCommand(command, panel?.kind === "newCommand" ? panel.collectionId : undefined);
+      await persistCommand(command, panel?.kind === "newCommand" ? panel.collectionId : undefined, showOnHome);
       clearFailure(command.id);
       if (previous?.directory !== command.directory)
         setDirectories((values) => {

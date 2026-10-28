@@ -598,5 +598,7 @@
   "bountyAcknowledge": "知道了",
   "bountyClearPeaks": "清空峰值记录",
   "bountyNoPeaks": "暂无异动或峰值记录",
-  "bountyNoWatches": "暂无悬赏提醒规则"
+  "bountyNoWatches": "暂无悬赏提醒规则",
+  "openUrl": "打开",
+  "urlOpenFailed": "无法打开链接"
 }

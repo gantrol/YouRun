@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type SetStateAction } from "react";
-import { clearCommandBindings, maxLaunchButtons, type Command, type Project, type Collection } from "../model";
+import { clearCommandBindings, setCommandHomeButton, maxLaunchButtons, type Command, type Project, type Collection } from "../model";
 import { validateCollectionTree } from "../collections";
 import { projectAPI } from "../project-api";
 import { applyLaunchRecommendations, type LaunchRecommendation } from "../launch-recommendations";
@@ -137,12 +137,13 @@ export function useWorkspaceViewModel(initial: Snapshot) {
     }
   }
   return {
-    saveCommand: (command: Command, collectionId?: string) => saveDefinitions((current) => {
+    saveCommand: (command: Command, collectionId?: string, showOnHome?: boolean) => saveDefinitions((current) => {
       if (collectionId && !current.collections?.some(item => item.id === collectionId)) throw new Error("collectionMissing");
+      const projects = clearCommandBindings(current.projects, command.id, command.project);
       return { ...current,
       commands: current.commands.some((item) => item.id === command.id)
         ? current.commands.map((item) => item.id === command.id ? command : item) : [...current.commands, command],
-      projects: clearCommandBindings(current.projects, command.id, command.project),
+      projects: showOnHome === undefined ? projects : setCommandHomeButton(projects, command, showOnHome),
       collections: (current.collections ?? []).map(item => item.id === collectionId ? { ...item, commandIds: [...new Set([...item.commandIds, command.id])] } : item),
     }; }),
     deleteCommand: (id: string) => saveDefinitions((current) => ({ ...current,

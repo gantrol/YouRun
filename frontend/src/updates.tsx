@@ -7,6 +7,7 @@ import { TextField } from "./controls";
 import { api } from "./api";
 import type { Messages } from "./messages";
 import { Disclosure } from "@/renderer/components/ui/disclosure";
+import { stripAnsiAndControl } from "./terminal-output";
 
 export type UpdateState = {
   disabled?: boolean;
@@ -283,7 +284,7 @@ export function UpdatesPanel({
           <Textarea
             readOnly
             aria-label={m.updateBuildLog}
-            value={state.buildLog}
+            value={stripAnsiAndControl(state.buildLog)}
             className="h-48 font-mono text-xs"
           />
         )}

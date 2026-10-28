@@ -1,6 +1,7 @@
-import { ArrowLeft, GitBranch, LoaderCircle, Pencil, Play, RotateCw, Square } from "lucide-react";
+import { ArrowLeft, ExternalLink, GitBranch, LoaderCircle, Pencil, Play, RotateCw, Square } from "lucide-react";
 import { displayedRunState, type RunOperation } from "./models/run-operation";
 import { Button } from "@/renderer/components/ui/button";
+import { ActionMenu, ActionMenuItem, ActionMenuLabel } from "@/renderer/components/ui/action-menu";
 import { RunStatus } from "./run-state";
 import type { Run, SourceSnapshot } from "./model";
 import type { Messages } from "./messages";
@@ -11,6 +12,7 @@ import { useViewPosition } from "@/renderer/components/ui/view-state";
 import { Disclosure } from "@/renderer/components/ui/disclosure";
 import { formatSourceSummary } from "./project-workspaces";
 import type { ResourceOriginContext } from "./pro-mode";
+import { TerminalOutputContent, useParsedTerminalOutput } from "./terminal-output";
 
 export function RunOutput({
   run,
@@ -55,6 +57,13 @@ export function RunOutput({
   const [issue, setIssue] = useState("");
   const [truncated, setTruncated] = useState(false);
   const [currentSource, setCurrentSource] = useState<SourceSnapshot | null>(null);
+  const parsedOutput = useParsedTerminalOutput(output);
+  const primaryUrl = parsedOutput.urls[0];
+  const handleOpenUrl = (url: string) => {
+    void api("open-url", "POST", { url }).catch(() => {
+      setIssue(m.urlOpenFailed);
+    });
+  };
   const logRef = useRef<HTMLPreElement>(null);
   const following = useRef(true);
   const position = useViewPosition(`run:${run.id}:output`);
@@ -143,6 +152,45 @@ export function RunOutput({
           {onEdit && showEditAction && <Button variant="ghost" size="icon-sm" aria-label={m.editCommand} title={m.editCommand} onClick={onEdit} data-navigation-key={`run:${run.id}:edit`}>
             <Pencil className="size-4" aria-hidden="true" />
           </Button>}
+          {primaryUrl && (
+            parsedOutput.urls.length > 1 ? (
+              <ActionMenu
+                label={m.openUrl}
+                onAction={() => handleOpenUrl(primaryUrl.openUrl)}
+                trigger={(props) => (
+                  <Button
+                    {...props}
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label={`${m.openUrl} · ${primaryUrl.displayUrl}`}
+                  >
+                    <ExternalLink className="size-4" aria-hidden="true" />
+                  </Button>
+                )}
+              >
+                <ActionMenuLabel>{m.openUrl}</ActionMenuLabel>
+                {parsedOutput.urls.map((item) => (
+                  <ActionMenuItem
+                    key={item.openUrl}
+                    onSelect={() => handleOpenUrl(item.openUrl)}
+                  >
+                    <ExternalLink aria-hidden="true" />
+                    <span className="truncate font-mono text-xs">{item.displayUrl}</span>
+                  </ActionMenuItem>
+                ))}
+              </ActionMenu>
+            ) : (
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label={`${m.openUrl} · ${primaryUrl.displayUrl}`}
+                title={`${m.openUrl} · ${primaryUrl.displayUrl}`}
+                onClick={() => handleOpenUrl(primaryUrl.openUrl)}
+              >
+                <ExternalLink className="size-4" aria-hidden="true" />
+              </Button>
+            )
+          )}
           {onReplay && run.status !== "unknown" && (
             <Button
               variant="outline"
@@ -263,9 +311,9 @@ export function RunOutput({
         if (restoring.current !== undefined) return;
         const el = event.currentTarget; following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; position.write(el.scrollTop);
       }}
-        className="min-h-32 flex-1 overflow-auto whitespace-pre-wrap break-all bg-surface-sunken p-3 text-xs leading-6"
+        className="min-h-32 flex-1 overflow-auto whitespace-pre-wrap break-all bg-surface-sunken p-3 font-mono text-xs leading-6"
         aria-label={m.recentOutput}
-      >{`$ ${run.text}\n${output}`}</pre>}
+      ><TerminalOutputContent commandText={run.text} parsed={parsedOutput} m={m} onOpenUrl={handleOpenUrl} /></pre>}
       {!run.omitOutput && (issue || truncated) && (
         <p role="status" className="mt-2 text-xs text-muted-foreground">
           {issue || m.logsTruncated}

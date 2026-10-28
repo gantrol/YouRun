@@ -197,6 +197,10 @@ func New(framework string, frontend fs.FS) (*Host, error) {
 			host.serveOpenProject(w, r)
 			return
 		}
+		if r.URL.Path == "/api/open-url" {
+			host.serveOpenURL(w, r)
+			return
+		}
 		if r.URL.Path == "/api/project-openers" {
 			host.serveProjectOpeners(w, r)
 			return

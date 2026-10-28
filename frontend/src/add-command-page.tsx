@@ -50,7 +50,7 @@ export function AddCommandPage({ scan, manual, onDirty, onBusy }: {
     </div>}
     <div className={mode === "manual" ? "flex min-h-0 flex-1 flex-col" : "hidden"} inert={mode !== "manual"}>
       <CommandEditor {...manual} autoFocus={!scan.lockedProject} onDirty={setManualDirty} onBusy={setManualBusy}
-        onSave={command => saveWithOtherDraft("scan", () => manual.onSave(command))}/>
+        onSave={(...args) => saveWithOtherDraft("scan", () => manual.onSave(...args))}/>
     </div>
   </section>;
 }

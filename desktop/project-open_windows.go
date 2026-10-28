@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
+
+	"golang.org/x/sys/windows"
 )
 
 func openProjectDirectory(directory string) error {
@@ -15,4 +17,16 @@ func openProjectDirectory(directory string) error {
 	}
 	go cmd.Wait()
 	return nil
+}
+
+func openExternalURL(target string) error {
+	verb, err := windows.UTF16PtrFromString("open")
+	if err != nil {
+		return err
+	}
+	file, err := windows.UTF16PtrFromString(target)
+	if err != nil {
+		return err
+	}
+	return windows.ShellExecute(0, verb, file, nil, nil, windows.SW_SHOWNORMAL)
 }

@@ -134,18 +134,24 @@ export function CommandEditor({
   commands: Command[];
   m: Messages;
   onDirty: (value: boolean) => void;
-  onSave: (command: Command) => Promise<void>;
+  onSave: (command: Command, showOnHome?: boolean) => Promise<void>;
   onCancel?: () => void;
 }) {
   const [startingDirectory] = useState(defaultDirectory);
+  const savedProject = projects.find(project => project.id === (initial?.project ?? projectId));
   const editor = useDraftViewModel({
     aliases: (initial?.aliases ?? []).join(", "), name: initial ? commandTitle(initial, m) : "", text: initial?.text ?? "",
     directory: initial?.directory ?? startingDirectory, project: initial?.project ?? projectId ?? "independent",
     shell: initial?.shell ?? "default", platform: initial?.platform ?? "macOS / Windows",
     icon: (initial?.icon ?? "play") as IconId, hidden: !!initial?.hidden, fields: initial?.fields ?? [],
+    showOnHome: initial?.project || projectId
+      ? !initial?.hidden && !savedProject?.hidden && !!savedProject?.buttons.some(button => button.commandId === initial?.id && !button.hidden)
+      : !initial?.hidden,
     omitOutput: !!initial?.omitOutput,
   });
-  const { aliases, name, text, directory, project, shell, platform, icon, hidden, fields, omitOutput } = editor.draft;
+  const { aliases, name, text, directory, project, shell, platform, icon, hidden, fields, showOnHome, omitOutput } = editor.draft;
+  const homeChanged = showOnHome !== editor.base.showOnHome || project !== editor.base.project
+    || hidden !== editor.base.hidden || (showOnHome && icon !== editor.base.icon);
   const searchAliases = [...new Map(aliases.split(/[,，;；\n]/).map(value => value.trim()).filter(Boolean).map(value => [value.toLocaleLowerCase(), value])).values()];
   const aliasesInvalid = searchAliases.length > 20 || searchAliases.some(value => new TextEncoder().encode(value).length > 200 || value.includes("\0"));
   const setName = (value: string) => editor.setField("name", value);
@@ -217,7 +223,7 @@ export function CommandEditor({
             hidden,
             omitOutput,
             favorite: initial?.favorite ?? false,
-          }, currentPlatform));
+          }, currentPlatform), project !== "independent" && homeChanged ? showOnHome : undefined);
         } catch (cause) {
           setSaveError(cause instanceof Error ? cause.message : "storageFailed");
         } finally {
@@ -240,6 +246,8 @@ export function CommandEditor({
           ]}
           onChange={(id) => {
             setProject(id);
+            const owner = projects.find(item => item.id === id);
+            editor.setField("showOnHome", !hidden && (id === "independent" || (!owner?.hidden && !!owner?.buttons.some(button => button.commandId === initial?.id && !button.hidden))));
             setCandidate(undefined);
           }}
         />
@@ -350,8 +358,11 @@ export function CommandEditor({
       </fieldset>
       <BooleanField
         label={m.showOnHome}
-        checked={!hidden}
-        onChange={(checked) => setHidden(!checked)}
+        checked={showOnHome}
+        onChange={(checked) => {
+          editor.setField("showOnHome", checked);
+          if (project === "independent" || checked) setHidden(!checked);
+        }}
       />
       <BooleanField label={m.recordOutput} checked={!omitOutput} onChange={checked => editor.setField("omitOutput", !checked)} />
       </div>

@@ -533,6 +533,13 @@ type ProcessGroup = {
 const BOUNTY_WINDOW_MS = 30_000;
 const BOUNTY_POLL_INTERVAL_MS = 2_000;
 
+// Historical averages only need grouping, filters and metrics. Retaining full
+// process snapshots also retains every poll's icons, command lines and sources.
+type ProcessSample = Pick<ProcessItem,
+  "projectId" | "workspaceId" | "ownership" | "cpuPercent" | "memoryBytes"
+  | "gpuPercent" | "gpuMemoryBytes" | "networkBytesPerSec"
+> & { groupKey: string };
+
 function getProcessGroupKey(item: ProcessItem): string {
   const label = friendlyProcessLabel(item.name, item.displayName);
   return item.ownership === "managed"
@@ -689,7 +696,7 @@ export function ProModeWorkspace({
     unreadableProcessCount?: number;
   }>({ items: [] });
   const [bountySamples, setBountySamples] = useState<
-    Array<{ at: number; items: ProcessItem[] }>
+    Array<{ at: number; items: ProcessSample[] }>
   >([]);
   const [bountyMode, setBountyMode] = useState<BountyBoardMode>("live");
   const [bountyData, setBountyData] = useState<BountySnapshot>({
@@ -812,10 +819,21 @@ export function ProModeWorkspace({
         if (res.bounty) {
           applyBountySnapshot(res.bounty);
         }
+        const samples: ProcessSample[] = items.map((item) => ({
+          groupKey: getProcessGroupKey(item),
+          projectId: item.projectId,
+          workspaceId: item.workspaceId,
+          ownership: item.ownership,
+          cpuPercent: item.cpuPercent,
+          memoryBytes: item.memoryBytes,
+          gpuPercent: item.gpuPercent,
+          gpuMemoryBytes: item.gpuMemoryBytes,
+          networkBytesPerSec: item.networkBytesPerSec,
+        }));
         setBountySamples((prev) => {
           const cutoff = now - BOUNTY_WINDOW_MS;
           const kept = prev.filter((s) => s.at >= cutoff);
-          return [...kept, { at: now, items }];
+          return [...kept, { at: now, items: samples }];
         });
       } catch {
         if (!silent) {
@@ -1214,7 +1232,7 @@ export function ProModeWorkspace({
         if (state.processes.ownership !== "all" && item.ownership !== state.processes.ownership) {
           continue;
         }
-        const key = getProcessGroupKey(item);
+        const key = item.groupKey;
         let entry = perSample.get(key);
         if (!entry) {
           entry = {

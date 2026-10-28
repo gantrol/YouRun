@@ -598,5 +598,7 @@
   "bountyAcknowledge": "Dismiss",
   "bountyClearPeaks": "Clear peak history",
   "bountyNoPeaks": "No spikes or peak records",
-  "bountyNoWatches": "No bounty alert rules"
+  "bountyNoWatches": "No bounty alert rules",
+  "openUrl": "Open",
+  "urlOpenFailed": "Unable to open URL"
 }
