@@ -135,8 +135,7 @@ func (m *updateManager) buildLocal(ctx context.Context, source string, output *b
 		"--target="+runtime.GOOS, "--arch="+runtime.GOARCH, "--build="+buildID, "--package=false", "--manifest=true")
 	cmd.Dir = source
 	cmd.Env = applicationEnvironment(m.host.dataDir)
-	cmd.Stdout, cmd.Stderr = output, output
-	if err = engine.Execute(ctx, cmd); err != nil {
+	if err = engine.Execute(ctx, cmd, output); err != nil {
 		fmt.Fprintln(output, err)
 		if ctx.Err() != nil {
 			return ctx.Err()

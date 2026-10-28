@@ -39,13 +39,14 @@ func startIndependent(cmd *exec.Cmd, log *os.File, groupName ...string) (*indepe
 			windows.CloseHandle(job)
 		}
 	}()
-	// A managed developer tool may itself invoke YouRun. Its new execution
-	// helper must be able to leave this Job instead of depending on that tool.
-	// Ordinary descendants still inherit the Job; explicit breakaway is opt-in.
-	limits := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{}
-	limits.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_BREAKAWAY_OK
-	if _, err = windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation, uintptr(unsafe.Pointer(&limits)), uint32(unsafe.Sizeof(limits))); err != nil {
-		return nil, nil, err
+	if name != nil {
+		// Managed tools may launch independent YouRun tasks. Local builds use
+		// unnamed Jobs and keep every child inside their cancellation boundary.
+		limits := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{}
+		limits.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_BREAKAWAY_OK
+		if _, err = windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation, uintptr(unsafe.Pointer(&limits)), uint32(unsafe.Sizeof(limits))); err != nil {
+			return nil, nil, err
+		}
 	}
 	input, err := os.Open(os.DevNull)
 	if err != nil {

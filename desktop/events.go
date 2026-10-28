@@ -138,6 +138,9 @@ func (h *Host) serveEvents(w http.ResponseWriter, r *http.Request) {
 				}
 				reset := cursor == nil
 				if firstLog || reset || len(chunk.Data) > 0 {
+					// The web renderer decodes Data incrementally to preserve split
+					// UTF-8. Do not send a second, unused copy of every log chunk.
+					chunk.Text = ""
 					if !send(map[string]any{"chunk": chunk, "reset": reset}) {
 						return false
 					}

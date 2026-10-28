@@ -62,7 +62,6 @@ func shellCommand(c Command, request Launch) (*exec.Cmd, string, error) {
 	}
 	cmd.Dir = request.Directory
 	cmd.Env = environment
-	prepareChild(cmd)
 	return cmd, text, nil
 }
 

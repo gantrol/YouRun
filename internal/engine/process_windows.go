@@ -52,7 +52,7 @@ func prepareDetached(cmd *exec.Cmd) {
 	if _, mode := CanLaunchDetached(); mode != "nestedJobFallback" {
 		flags |= windows.CREATE_BREAKAWAY_FROM_JOB
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: flags}
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: flags}
 }
 
 func prepareDetachedFallback(cmd *exec.Cmd, startErr error) bool {
@@ -66,9 +66,6 @@ func prepareDetachedFallback(cmd *exec.Cmd, startErr error) bool {
 	return true
 }
 
-func prepareChild(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_SUSPENDED | windows.CREATE_NEW_PROCESS_GROUP}
-}
 func prepareHidden(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 }
@@ -106,31 +103,6 @@ type processGroup struct {
 	rootHandle windows.Handle
 }
 
-// Start suspended so no descendant can escape before assignment to the job.
-func attachProcess(cmd *exec.Cmd) (*processGroup, error) {
-	job, err := windows.CreateJobObject(nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	p, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE|windows.PROCESS_SUSPEND_RESUME, false, uint32(cmd.Process.Pid))
-	if err != nil {
-		windows.CloseHandle(job)
-		return nil, err
-	}
-	defer windows.CloseHandle(p)
-	if err = windows.AssignProcessToJobObject(job, p); err != nil {
-		windows.CloseHandle(job)
-		return nil, err
-	}
-	resume := windows.NewLazySystemDLL("ntdll.dll").NewProc("NtResumeProcess")
-	status, _, _ := resume.Call(uintptr(p))
-	if status != 0 {
-		windows.TerminateJobObject(job, 1)
-		windows.CloseHandle(job)
-		return nil, syscall.Errno(status)
-	}
-	return &processGroup{job: job}, nil
-}
 func (g *processGroup) stop() error { return windows.TerminateJobObject(g.job, 1) }
 func (g *processGroup) close()      { windows.CloseHandle(g.job) }
 
