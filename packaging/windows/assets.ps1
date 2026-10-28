@@ -5,7 +5,7 @@ Add-Type -AssemblyName System.Drawing
 [IO.Directory]::CreateDirectory($Destination) | Out-Null
 
 # The source PNG is rendered from resources/branding/yourun-rabbit.svg.
-$sourcePath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\resources\branding\yourun-rabbit-app.png'))
+$sourcePath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\resources\branding\yourun-rabbit.png'))
 $sourceImage = [Drawing.Image]::FromFile($sourcePath)
 try {
     $assets = @{ 'StoreLogo.png' = 50; 'Square44x44Logo.png' = 44; 'Square150x150Logo.png' = 150 }
@@ -17,7 +17,7 @@ try {
             $graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
             $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
             $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-            $graphics.Clear([Drawing.ColorTranslator]::FromHtml('#fff8e9'))
+            $graphics.Clear([Drawing.Color]::Transparent)
             $graphics.DrawImage($sourceImage, [Drawing.Rectangle]::new(0, 0, $size, $size))
             $bitmap.Save((Join-Path $Destination $asset.Key), [Drawing.Imaging.ImageFormat]::Png)
         } finally {

@@ -600,5 +600,9 @@
   "bountyNoPeaks": "暂无异动或峰值记录",
   "bountyNoWatches": "暂无悬赏提醒规则",
   "openUrl": "打开",
-  "urlOpenFailed": "无法打开链接"
+  "urlOpenFailed": "无法打开链接",
+  "hostApplication": "宿主应用",
+  "representativePid": "代表 PID",
+  "processGroupTotal": "分组合计",
+  "legacyProcessGroup": "旧分组合计"
 }

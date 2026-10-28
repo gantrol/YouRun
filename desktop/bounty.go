@@ -45,6 +45,8 @@ type BountyGroupSummary struct {
 }
 
 type BountyEvent struct {
+	RuntimeHost *RuntimeHost `json:"runtimeHost,omitempty"`
+
 	ID                 string   `json:"id"`
 	GroupKey           string   `json:"groupKey"`
 	Category           string   `json:"category"`   // "cpu" | "memory" | "gpu" | "network"
@@ -89,6 +91,9 @@ type BountyEvent struct {
 }
 
 type BountyWatch struct {
+	HostExecutable string `json:"hostExecutable,omitempty"`
+	GroupKey       string `json:"groupKey,omitempty"`
+
 	ID              string  `json:"id"`
 	Title           string  `json:"title"`
 	MatchKind       string  `json:"matchKind"` // "process" | "command"
@@ -173,6 +178,9 @@ func friendlyProcessLabelGo(name, displayName string) string {
 }
 
 func processGroupKeyGo(item ProcessItem) string {
+	if item.GroupKey != "" {
+		return item.GroupKey
+	}
 	label := strings.ToLower(friendlyProcessLabelGo(item.Name, item.DisplayName))
 	if item.Ownership == "managed" {
 		id := item.RunID
@@ -274,7 +282,7 @@ func recordBountyObservation(ctx context.Context, dataDir string, items []Proces
 		if !exists {
 			g = &aggGroup{
 				key:         key,
-				title:       friendlyProcessLabelGo(item.Name, item.DisplayName),
+				title:       processGroupTitle(item),
 				icon:        item.Icon,
 				rep:         item,
 				ports:       map[int]bool{},
@@ -683,6 +691,12 @@ func recordBountyObservation(ctx context.Context, dataDir string, items []Proces
 }
 
 func watchMatchesGroup(w BountyWatch, groupTitle string, rep ProcessItem, executables map[string]bool) bool {
+	if w.GroupKey != "" && w.GroupKey != processGroupKeyGo(rep) {
+		return false
+	}
+	if w.HostExecutable != "" && (rep.RuntimeHost == nil || !strings.EqualFold(w.HostExecutable, rep.RuntimeHost.Executable)) {
+		return false
+	}
 	if w.MatchKind == "command" && w.CommandID != "" {
 		return rep.CommandID == w.CommandID
 	}
@@ -830,6 +844,7 @@ func upsertBountyEventLocked(
 			ev.PID = rep.PID
 			ev.ProcessIdentity = rep.ProcessIdentity
 			ev.ControlRunID = rep.ControlRunID
+			ev.RuntimeHost = rep.RuntimeHost
 			if rep.Executable != "" {
 				ev.Executable = rep.Executable
 			}
@@ -872,6 +887,7 @@ func upsertBountyEventLocked(
 		PID:                rep.PID,
 		ProcessIdentity:    rep.ProcessIdentity,
 		ControlRunID:       rep.ControlRunID,
+		RuntimeHost:        rep.RuntimeHost,
 		Executable:         rep.Executable,
 		CommandLine:        rep.CommandLine,
 		CommandLineState:   rep.CommandLineState,
@@ -987,6 +1003,9 @@ func (h *Host) serveResourcesBounties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
+		HostExecutable string `json:"hostExecutable,omitempty"`
+		GroupKey       string `json:"groupKey,omitempty"`
+
 		Action        string  `json:"action"`
 		ID            string  `json:"id,omitempty"`
 		Title         string  `json:"title,omitempty"`
@@ -1044,6 +1063,8 @@ func (h *Host) serveResourcesBounties(w http.ResponseWriter, r *http.Request) {
 		for i := range bountyStateCache.Watches {
 			existing := &bountyStateCache.Watches[i]
 			if strings.EqualFold(existing.TargetName, targetName) &&
+				strings.EqualFold(existing.HostExecutable, strings.TrimSpace(req.HostExecutable)) &&
+				existing.GroupKey == strings.TrimSpace(req.GroupKey) &&
 				existing.Category == cat &&
 				existing.ConditionKind == cond &&
 				existing.CommandID == req.CommandID {
@@ -1061,21 +1082,23 @@ func (h *Host) serveResourcesBounties(w http.ResponseWriter, r *http.Request) {
 		}
 		if !updated {
 			watch := BountyWatch{
-				ID:            engine.ID(),
-				Title:         title,
-				MatchKind:     matchKind,
-				TargetName:    targetName,
-				Executable:    strings.TrimSpace(req.Executable),
-				CommandID:     req.CommandID,
-				ProjectID:     req.ProjectID,
-				ProjectName:   req.ProjectName,
-				Category:      cat,
-				ConditionKind: cond,
-				Threshold:     req.Threshold,
-				NotifyToast:   req.NotifyToast,
-				Enabled:       true,
-				Note:          strings.TrimSpace(req.Note),
-				CreatedAt:     nowISO,
+				HostExecutable: strings.TrimSpace(req.HostExecutable),
+				GroupKey:       strings.TrimSpace(req.GroupKey),
+				ID:             engine.ID(),
+				Title:          title,
+				MatchKind:      matchKind,
+				TargetName:     targetName,
+				Executable:     strings.TrimSpace(req.Executable),
+				CommandID:      req.CommandID,
+				ProjectID:      req.ProjectID,
+				ProjectName:    req.ProjectName,
+				Category:       cat,
+				ConditionKind:  cond,
+				Threshold:      req.Threshold,
+				NotifyToast:    req.NotifyToast,
+				Enabled:        true,
+				Note:           strings.TrimSpace(req.Note),
+				CreatedAt:      nowISO,
 			}
 			bountyStateCache.Watches = append([]BountyWatch{watch}, bountyStateCache.Watches...)
 			if len(bountyStateCache.Watches) > bountyMaxWatches {

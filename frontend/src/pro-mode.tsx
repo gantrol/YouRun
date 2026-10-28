@@ -75,6 +75,7 @@ export type BountyGroupSummary = {
 };
 
 export type BountyEvent = {
+  runtimeHost?: RuntimeHost;
   id: string;
   groupKey: string;
   category: "cpu" | "memory" | "gpu" | "network";
@@ -119,6 +120,8 @@ export type BountyEvent = {
 };
 
 export type BountyWatch = {
+  hostExecutable?: string;
+  groupKey?: string;
   id: string;
   title: string;
   matchKind: "process" | "command" | string;
@@ -148,7 +151,18 @@ export type BountySnapshot = {
   unreadAlertCount: number;
 };
 
+type RuntimeHost = {
+  pid: number;
+  processIdentity: string;
+  name: string;
+  displayName?: string;
+  executable?: string;
+};
+
 export type ProcessItem = {
+  groupKey?: string;
+  runtimeRootPid?: number;
+  runtimeHost?: RuntimeHost;
   processIdentity?: string;
   controlRunId?: string;
   pid: number;
@@ -541,10 +555,31 @@ type ProcessSample = Pick<ProcessItem,
 > & { groupKey: string };
 
 function getProcessGroupKey(item: ProcessItem): string {
+  if (item.groupKey) return item.groupKey;
   const label = friendlyProcessLabel(item.name, item.displayName);
   return item.ownership === "managed"
     ? `managed:${item.runId || item.pid}:${label.toLowerCase()}`
     : `ext:${label.toLowerCase()}`;
+}
+
+function getProcessGroupTitle(item: ProcessItem): string {
+  if (item.runtimeHost) {
+    return `WebView2 · ${friendlyProcessLabel(item.runtimeHost.name, item.runtimeHost.displayName)}`;
+  }
+  if (item.runtimeRootPid) return `WebView2 · PID ${item.runtimeRootPid}`;
+  return friendlyProcessLabel(item.name, item.displayName);
+}
+
+function runtimeWatchScope(groupKey?: string, host?: RuntimeHost) {
+  if (!groupKey?.startsWith("runtime:webview2:")) return {};
+  // An executable survives host restarts. Without one, stay with this group;
+  // never silently turn an unresolved runtime into a system-wide watch.
+  return host?.executable ? { hostExecutable: host.executable } : { groupKey };
+}
+
+function legacyWebViewGroup(event: BountyEvent) {
+  return event.processName.toLowerCase() === "msedgewebview2.exe"
+    && !event.groupKey.startsWith("runtime:webview2:");
 }
 
 function defaultThresholdFor(
@@ -708,6 +743,8 @@ export function ProModeWorkspace({
   const [selectedPeakEventId, setSelectedPeakEventId] = useState<string | undefined>(undefined);
   const [watchDialogOpen, setWatchDialogOpen] = useState(false);
   const [watchDraft, setWatchDraft] = useState<{
+    hostExecutable?: string;
+    groupKey?: string;
     title: string;
     matchKind: "process" | "command";
     targetName: string;
@@ -851,6 +888,8 @@ export function ProModeWorkspace({
 
   const openWatchDialogFor = useCallback(
     (target?: {
+      hostExecutable?: string;
+      groupKey?: string;
       title?: string;
       name?: string;
       executable?: string;
@@ -862,6 +901,8 @@ export function ProModeWorkspace({
       const cat = target?.defaultCategory ?? "network";
       const label = target?.title || (target?.name ? friendlyProcessLabel(target.name, target.title) : "");
       setWatchDraft({
+        hostExecutable: target?.hostExecutable,
+        groupKey: target?.groupKey,
         title: label,
         matchKind: target?.commandId ? "command" : "process",
         targetName: label || target?.name || "",
@@ -885,6 +926,8 @@ export function ProModeWorkspace({
     try {
       const snap = await api<BountySnapshot>("resources/bounties", "POST", {
         action: "create_watch",
+        hostExecutable: watchDraft.hostExecutable,
+        groupKey: watchDraft.groupKey,
         title: watchDraft.title.trim() || targetName,
         matchKind: watchDraft.matchKind,
         targetName,
@@ -1140,6 +1183,8 @@ export function ProModeWorkspace({
         pidStr.includes(q) ||
         item.name.toLowerCase().includes(q) ||
         (item.displayName ?? "").toLowerCase().includes(q) ||
+        getProcessGroupTitle(item).toLowerCase().includes(q) ||
+        (item.runtimeHost?.executable ?? "").toLowerCase().includes(q) ||
         (item.commandLine ?? "").toLowerCase().includes(q) ||
         (item.projectName ?? "").toLowerCase().includes(q) ||
         (item.workspaceName ?? "").toLowerCase().includes(q)
@@ -1320,7 +1365,7 @@ export function ProModeWorkspace({
     const groups: ProcessGroup[] = [];
     for (const [key, items] of map.entries()) {
       const primary = items[0];
-      const title = friendlyProcessLabel(primary.name, primary.displayName);
+      const title = getProcessGroupTitle(primary);
       const icon = items.find((i) => i.icon)?.icon;
       let totalMemory = 0;
       let totalCpuSum = 0;
@@ -1568,6 +1613,9 @@ export function ProModeWorkspace({
     if (!selectedProcess) return undefined;
     return processGroups.find((g) => g.items.some((i) => i.pid === selectedProcess.pid));
   }, [processGroups, selectedProcess]);
+
+  const useGroupTotals = Boolean(selectedGroup && selectedGroup.items.length > 1
+    && (state.subview === "home" || (!expandedGroups[selectedGroup.key] && !state.processes.query.trim())));
 
   const filteredPorts = useMemo(() => {
     const rawQ = state.ports.query.trim().toLowerCase();
@@ -2593,7 +2641,7 @@ export function ProModeWorkspace({
                                     ]
                                       .filter(Boolean)
                                       .join(" · ")
-                                  : `PID ${rep.pid}`}
+                                  : `${group.items.length > 1 ? m.representativePid : "PID"} ${rep.pid}`}
                               </div>
                             </div>
                           </div>
@@ -2765,6 +2813,7 @@ export function ProModeWorkspace({
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5">
                                 <span className="truncate font-medium">{ev.title}</span>
+                                {legacyWebViewGroup(ev) && <span className="shrink-0 text-[10px]">{m.legacyProcessGroup}</span>}
                                 {ev.reasonKind === "rapid_rise" && (
                                   <span
                                     className={`shrink-0 border px-1 py-0.5 text-[10px] font-medium leading-none ${
@@ -3124,7 +3173,7 @@ export function ProModeWorkspace({
                               icon={item.icon}
                             />
                             <span className="shrink-0 font-medium">
-                              {friendlyProcessLabel(item.name, item.displayName)}
+                              {getProcessGroupTitle(item)}
                             </span>
                             {item.ports && item.ports.length > 0 && (
                               <span
@@ -3694,6 +3743,7 @@ export function ProModeWorkspace({
                       <h3 className="truncate text-sm font-semibold">
                         {selectedPeakEvent.title}
                       </h3>
+                      {legacyWebViewGroup(selectedPeakEvent) && <span className="text-[11px] text-muted-foreground">{m.legacyProcessGroup}</span>}
                       {selectedPeakEvent.processName &&
                         selectedPeakEvent.processName.toLowerCase() !==
                           selectedPeakEvent.title.toLowerCase() && (
@@ -3706,7 +3756,7 @@ export function ProModeWorkspace({
                   {ownershipBadge(selectedPeakEvent.ownership, m)}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
-                  <span className="font-mono tabular-nums">PID {selectedPeakEvent.pid}</span>
+                  <span className="font-mono tabular-nums">{m.representativePid} {selectedPeakEvent.pid}</span>
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -3821,6 +3871,7 @@ export function ProModeWorkspace({
                   onClick={() =>
                     openWatchDialogFor({
                       title: selectedPeakEvent.title,
+                      ...runtimeWatchScope(selectedPeakEvent.groupKey, selectedPeakEvent.runtimeHost),
                       name: selectedPeakEvent.processName,
                       executable: selectedPeakEvent.executable,
                       commandId: selectedPeakEvent.commandId,
@@ -3876,7 +3927,7 @@ export function ProModeWorkspace({
                     />
                     <div className="min-w-0">
                       <h3 className="truncate text-sm font-semibold">
-                        {friendlyProcessLabel(selectedProcess.name, selectedProcess.displayName)}
+                        {useGroupTotals ? selectedGroup!.title : getProcessGroupTitle(selectedProcess)}
                       </h3>
                       {selectedProcess.displayName &&
                         selectedProcess.displayName.toLowerCase() !==
@@ -3890,7 +3941,8 @@ export function ProModeWorkspace({
                   {ownershipBadge(selectedProcess.ownership, m)}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
-                  <span className="font-mono tabular-nums">PID {selectedProcess.pid}</span>
+                  <span className="font-mono tabular-nums">{useGroupTotals ? m.representativePid : "PID"} {selectedProcess.pid}</span>
+                  {useGroupTotals && <span>{m.processGroupTotal} · {selectedGroup!.items.length}</span>}
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -3907,11 +3959,6 @@ export function ProModeWorkspace({
               </div>
 
               {(() => {
-                const useGroupTotals = Boolean(
-                  selectedGroup &&
-                    selectedGroup.items.length > 1 &&
-                    (state.subview === "home" || !expandedGroups[selectedGroup.key]),
-                );
                 const cpuVal = useGroupTotals
                   ? selectedGroup!.cpuSampling
                     ? m.cpuSampling
@@ -3995,6 +4042,12 @@ export function ProModeWorkspace({
               })()}
 
               <dl className="space-y-2">
+                {selectedProcess.runtimeHost && <div className="flex justify-between gap-2">
+                  <dt className="shrink-0 text-muted-foreground">{m.hostApplication}</dt>
+                  <dd className="truncate text-right" title={selectedProcess.runtimeHost.executable}>
+                    {friendlyProcessLabel(selectedProcess.runtimeHost.name, selectedProcess.runtimeHost.displayName)} · PID {selectedProcess.runtimeHost.pid}
+                  </dd>
+                </div>}
                 {selectedProcess.runId && (
                   <div className="flex justify-between gap-2">
                     <dt className="shrink-0 text-muted-foreground">{m.associatedRun}</dt>
@@ -4091,6 +4144,7 @@ export function ProModeWorkspace({
                       title:
                         selectedGroup?.title ||
                         friendlyProcessLabel(selectedProcess.name, selectedProcess.displayName),
+                      ...runtimeWatchScope(selectedProcess.groupKey, selectedProcess.runtimeHost),
                       name: selectedProcess.name,
                       executable: selectedProcess.executable,
                       commandId: selectedProcess.commandId,
@@ -4542,6 +4596,13 @@ export function ProModeWorkspace({
                     ...prev,
                     targetName: e.target.value,
                     title: e.target.value,
+                    hostExecutable: undefined,
+                    groupKey: undefined,
+                    executable: undefined,
+                    commandId: undefined,
+                    projectId: undefined,
+                    projectName: undefined,
+                    matchKind: "process",
                   }))
                 }
                 placeholder={m.bountyWatchTarget}

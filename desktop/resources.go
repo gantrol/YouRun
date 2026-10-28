@@ -19,6 +19,9 @@ import (
 )
 
 type ProcessItem struct {
+	GroupKey           string                 `json:"groupKey,omitempty"`
+	RuntimeRootPID     int                    `json:"runtimeRootPid,omitempty"`
+	RuntimeHost        *RuntimeHost           `json:"runtimeHost,omitempty"`
 	ProcessIdentity    string                 `json:"processIdentity,omitempty"`
 	ControlRunID       string                 `json:"controlRunId,omitempty"`
 	PID                int                    `json:"pid"`
@@ -445,7 +448,7 @@ func QueryProcesses(ctx context.Context, dataDir string, ws *workspace.Service) 
 		connCount := connCountByPID[p.PID]
 		netRate := p.NetworkBytesPerSec
 		netSampling := p.NetworkSampling
-		items = append(items, ProcessItem{
+		item := ProcessItem{
 			ProcessIdentity:    processIdentity(p),
 			ControlRunID:       attr.ControlRunID,
 			PID:                p.PID,
@@ -480,7 +483,9 @@ func QueryProcesses(ctx context.Context, dataDir string, ws *workspace.Service) 
 			WorkspaceName:      attr.WorkspaceName,
 			Directory:          attr.Directory,
 			LaunchSource:       attr.LaunchSource,
-		})
+		}
+		attributeRuntimeGroup(&item, procs, now)
+		items = append(items, item)
 	}
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].Ownership != items[j].Ownership {

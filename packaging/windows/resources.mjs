@@ -5,7 +5,7 @@ import path from "node:path";
 const winres = "github.com/tc-hib/go-winres@v0.3.3";
 
 export async function withWindowsResources({ root, framework, arch, version, executable, execute }, build) {
-  const icon = path.join(root, "resources/branding/yourun-rabbit-app.png");
+  const icon = path.join(root, "resources/branding/yourun-rabbit.png");
   await access(icon);
   const resource = path.join(root, framework, `yourun_windows_${arch}.syso`);
   // Claim the file exclusively; never overwrite another build's resource file.
